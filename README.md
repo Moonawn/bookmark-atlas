@@ -2,7 +2,7 @@
 
 **把收藏变成可以持续积累、检索和整理的本地资料库。**
 
-独立开发，非 fork。首版支持 X Bookmarks，保留 **官方 OAuth API** 和 **网页登录会话** 两个入口；后续通过站点适配器扩展其他平台。
+Bookmark Atlas 支持 X Bookmarks，提供 **官方 OAuth API** 和 **网页登录会话** 两个入口；后续通过站点适配器扩展其他平台。
 
 [![CI](https://github.com/Moonawn/bookmark-atlas/actions/workflows/ci.yml/badge.svg)](https://github.com/Moonawn/bookmark-atlas/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -30,9 +30,9 @@ uv sync --extra browser
 uv run bookmark-atlas --version
 ```
 
-也可以从 [GitHub Releases](https://github.com/Moonawn/bookmark-atlas/releases) 下载 wheel 后通过 `pip` 安装。当前没有发布到 PyPI。
+也可以从 [GitHub Releases](https://github.com/Moonawn/bookmark-atlas/releases) 下载 wheel 后通过 `pip` 安装。
 
-## 先用 Chrome 登录态跑通
+## 使用 Chrome 登录态
 
 在 Chrome 中登录自己的 X 账号，并确认能打开收藏页。Cookie 仅用于访问 X，不写入归档、不上传 GitHub。
 
@@ -51,9 +51,9 @@ uv run bookmark-atlas sync --mode web --browser chrome
 
 程序会读取已有系统 HTTPS 代理或标准代理环境变量；也可设置 `ATLAS_PROXY`。不会修改系统代理。
 
-## 保留官方 API 入口
+## 使用官方 API
 
-官方 API 需要自己的 X Developer App 和可用额度。网页登录成功并不等于拥有 API 授权。当前接入依据 [X 官方 Bookmarks 文档](https://docs.x.com/x-api/posts/bookmarks/quickstart/bookmarks-lookup) 和 [OAuth PKCE 文档](https://docs.x.com/fundamentals/authentication/oauth-2-0/authorization-code)。
+官方 API 需要自己的 X Developer App 和可用额度。网页登录成功并不等于拥有 API 授权。接口说明见 [X 官方 Bookmarks 文档](https://docs.x.com/x-api/posts/bookmarks/quickstart/bookmarks-lookup) 和 [OAuth PKCE 文档](https://docs.x.com/fundamentals/authentication/oauth-2-0/authorization-code)。
 
 在 Developer App 配置回调 URL `http://127.0.0.1:8765/callback`，然后：
 
@@ -141,6 +141,6 @@ uv run ruff format --check src tests
 uv build
 ```
 
-真实联调状态见 [验证记录](docs/verification.md)。网页接口会随 X 更新变化；遇到结构变化会报错，避免将错误响应当作空收藏。首版保存媒体元数据，不下载图片/视频二进制，不展开完整线程或外链正文；暂不支持收藏夹结构同步和其他站点。
+支持范围和测试覆盖见 [兼容性说明](docs/verification.md)。网页接口会随 X 更新变化；遇到结构变化会报错，避免将错误响应当作空收藏。首版保存媒体元数据，不下载图片/视频二进制，不展开完整线程或外链正文；暂不支持收藏夹结构同步和其他站点。
 
 [架构与站点扩展](docs/architecture.md) · [贡献指南](CONTRIBUTING.md) · [安全与隐私](SECURITY.md) · [MIT License](LICENSE)

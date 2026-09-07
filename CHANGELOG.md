@@ -2,7 +2,7 @@
 
 ## 0.1.0 — 2026-09-07
 
-Initial independent release of Bookmark Atlas.
+Initial release of Bookmark Atlas.
 
 - X OAuth API and authenticated web-session adapters with conservative automatic fallback.
 - PKCE OAuth login, refresh and private credential storage.
@@ -13,4 +13,4 @@ Initial independent release of Bookmark Atlas.
 - Manual sync and interval scheduler CLI; no automatic system startup changes.
 - Synthetic automated tests and cross-platform CI.
 
-X web collection was live-tested. Official API and Ollama integrations passed mock tests but await live credentials/model configuration; see [verification](docs/verification.md).
+See [compatibility and test coverage](docs/verification.md) for supported environments and integration requirements.

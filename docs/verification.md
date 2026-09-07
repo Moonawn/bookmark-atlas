@@ -1,34 +1,31 @@
-# v0.1.0 verification
+# Compatibility and test coverage
 
-Date: 2026-09-07. The project was independently implemented in this repository. No source was copied from the bookmark projects discussed during initial research.
+## Supported environments
 
-## Verification matrix
+- Python 3.11–3.13 on macOS and Linux.
+- X Bookmarks through an OAuth user token or an authenticated browser session.
+- Chrome on macOS has live integration coverage. Firefox, Brave, Edge, Chromium and Quark adapters require verification against the selected browser profile.
+- Official API access requires an X Developer App, the appropriate OAuth scopes and available API credits.
+- Model summaries require a running local Ollama service and an installed model.
 
-| Area | Verification | Status |
-|---|---|---|
-| Core archive and adapters | 51 synthetic automated tests | Passed |
-| Code quality | Ruff lint and format checks | Passed |
-| Distribution | wheel + source distribution build | Passed |
-| Installation | wheel installed into a separate clean Python environment; version and database initialization | Passed |
-| X web authentication | Current Chrome login; server-provided bootstrap account identity | Passed live |
-| X web collection | Bounded first capture; historical backfill; terminal-page handling | Passed live |
-| X repeat sync / scheduler one-shot | After a full scan: zero added, zero updated, zero reanalyzed | Passed live |
-| Auto selection | No API credentials → web adapter, explicit fallback reason | Passed live |
-| Local analysis/export | Rule-based extraction, topic index and per-item Markdown | Passed live |
-| Official X API | Mock transport: identity, paging, expanded authors/media, long posts, errors, PKCE primitives and refresh | Passed offline |
-| Official X API live OAuth | No Developer App credentials supplied during this release | Not live-tested |
-| Ollama analysis | Mock transport, output validation, retry behavior and loopback restriction | Passed offline; no local model was configured |
-| Other browsers | Cookie adapter code only; live test used Chrome on macOS | Not live-tested |
+## Validation coverage
 
-The unit test count includes parameterized scenarios. Test results do not assert that an external service will remain compatible. See GitHub Actions for the platform matrix on the published commit.
+| Component | Coverage |
+|---|---|
+| Archive and adapters | 51 automated cases covering normalization, paging, merging, transactions and recovery |
+| X web adapter | Live authentication, historical collection, repeat sync and automatic adapter selection |
+| Official X API | Mock HTTP coverage for identity, paging, expansions, long posts, errors and token refresh; live OAuth validation remains pending |
+| Ollama | Mock HTTP coverage for output validation, retries and local endpoint restrictions; live model validation remains pending |
+| Distribution | wheel and source builds; clean-environment installation and CLI execution |
+| CI | macOS and Linux with Python 3.11, 3.12 and 3.13 |
 
-## Issues found and fixed during live testing
+## Archive behavior
 
-1. X lazy-loads the Bookmarks GraphQL definition into a separate webpack chunk. Discovery now reads the authenticated page's name/hash maps and fetches relevant public script chunks without executing remote JavaScript.
-2. The old v1.1 account settings route returned 404. Identity now comes from the authenticated page's server-provided initial state, rather than that route or an assumed local cookie ID.
-3. An empty terminal bookmark page can return the same cursor. This now ends the scan; a repeated cursor with actual items still fails safely.
-4. Volatile video metadata changed between captures and caused redundant analysis. Media records now merge by identity, while content hashing excludes transient metadata. Raw responses remain preserved.
+- Each page and its progress marker commit together. A failed page does not advance the checkpoint.
+- Repeated collection of unchanged posts does not add duplicate records or repeat analysis.
+- Missing posts are retained in the local archive.
+- Account mismatch stops the sync. Rate limits create a cooldown shared by both X entry points.
+- Unrecognized timeline structures produce an error rather than an empty collection.
+- Media metadata is stored; image and video binaries, complete threads and linked-page bodies are outside the current collection scope.
 
-## Privacy boundary
-
-All live captures, account identifiers, browser data, credentials and generated personal reports remain outside this repository. Public tests contain synthetic data only. Release notes must not include private bookmark content or credentials.
+See [GitHub Actions](https://github.com/Moonawn/bookmark-atlas/actions) for current checks and [architecture](architecture.md) for the data flow.

@@ -1,6 +1,6 @@
 # Contributing
 
-This is an independently implemented project, not a fork of an existing bookmark scraper.
+Contribute adapters, archive improvements, analysis engines, and documentation to Bookmark Atlas.
 
 Use Python 3.11+ on macOS or Linux:
 
