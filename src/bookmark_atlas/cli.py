@@ -1,0 +1,224 @@
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+import time
+from pathlib import Path
+
+from . import __version__
+from .adapters.x_api import XAPI
+from .adapters.x_web import XWeb
+from .analysis import LocalAnalysis, OllamaAnalysis, analyze_pending
+from .config import home_path
+from .export import export_json, export_markdown
+from .models import AtlasError, RateLimitError
+from .oauth import login
+from .store import Store
+from .sync import process_lock, sync
+
+
+def positive(value):
+    result = int(value)
+    if result < 1:
+        raise argparse.ArgumentTypeError("必须是正整数")
+    return result
+
+
+def parser():
+    root = argparse.ArgumentParser(description="Bookmark Atlas · 本地收藏归档与整理")
+    root.add_argument("--version", action="version", version=__version__)
+    root.add_argument("--home", help="私有数据目录（默认 ~/.local/share/bookmark-atlas）")
+    commands = root.add_subparsers(dest="command", required=True)
+    for name in ("sync", "serve"):
+        cmd = commands.add_parser(
+            name, help="同步收藏" if name == "sync" else "按间隔执行同步和整理"
+        )
+        cmd.add_argument("--site", choices=["x"], default="x")
+        cmd.add_argument("--mode", choices=["auto", "api", "web"], default="auto")
+        cmd.add_argument("--prefer", choices=["api", "web"], default="api")
+        cmd.add_argument(
+            "--browser",
+            choices=["chrome", "firefox", "brave", "edge", "chromium", "quark"],
+            default="chrome",
+        )
+        cmd.add_argument("--cookie-file", help="指定浏览器配置的 Cookies 数据库路径")
+        cmd.add_argument("--max-pages", type=positive, default=50)
+        cmd.add_argument(
+            "--full", action="store_true", help="从头遍历，不按重复页提前结束；不删除旧数据"
+        )
+        cmd.add_argument("--overlap-pages", type=positive, default=2)
+        cmd.add_argument("--no-analyze", action="store_true")
+        cmd.add_argument("--ollama-model", help="使用已安装的本地 Ollama 模型生成中文摘要")
+        if name == "serve":
+            cmd.add_argument(
+                "--interval",
+                type=positive,
+                default=21600,
+                help="同步间隔秒数，默认 6 小时，最少 60 秒",
+            )
+            cmd.add_argument(
+                "--once", action="store_true", help="执行一轮后退出，用于系统调度和验证"
+            )
+    cmd = commands.add_parser("analyze", help="分析新增或变更内容，失败可重试")
+    cmd.add_argument("--ollama-model")
+    cmd.add_argument("--limit", type=positive, default=100)
+    cmd = commands.add_parser("export", help="导出 JSON 或 Markdown 主题知识库")
+    cmd.add_argument("format", choices=["json", "markdown"])
+    cmd.add_argument("--out", type=Path)
+    cmd.add_argument("--ollama-model")
+    commands.add_parser("status", help="查看本地归档与同步状态")
+    cmd = commands.add_parser("search", help="搜索本地原文、作者和链接（支持中文子串）")
+    cmd.add_argument("query")
+    cmd.add_argument("--limit", type=positive, default=20)
+    auth = commands.add_parser("auth", help="身份检查和官方 OAuth 登录").add_subparsers(
+        dest="auth_command", required=True
+    )
+    check = auth.add_parser("check")
+    check.add_argument("--mode", choices=["api", "web"], required=True)
+    check.add_argument("--browser", default="chrome")
+    check.add_argument("--cookie-file")
+    oauth = auth.add_parser("login")
+    oauth.add_argument("--client-id", default=os.getenv("ATLAS_X_CLIENT_ID"))
+    oauth.add_argument("--port", type=int, default=8765)
+    return root
+
+
+def engine_for(args):
+    return OllamaAnalysis(args.ollama_model) if args.ollama_model else LocalAnalysis()
+
+
+def factories_for(args, home):
+    return {"api": lambda: XAPI(home), "web": lambda: XWeb(args.browser, args.cookie_file)}
+
+
+def cycle(args, home):
+    with process_lock(home):
+        store = Store(home)
+        try:
+            result = sync(
+                store,
+                factories_for(args, home),
+                site=args.site,
+                mode=args.mode,
+                preferred=args.prefer,
+                max_pages=args.max_pages,
+                full=args.full,
+                overlap_pages=args.overlap_pages,
+            )
+            if not args.no_analyze:
+                engine = engine_for(args)
+                result["analysis"] = analyze_pending(store, engine, limit=500)
+                # Report updates are recoverable by re-running export.
+                result["report"] = export_markdown(store, home / "reports", engine.name)
+            return result
+        finally:
+            store.close()
+
+
+def run(args):
+    home = home_path(args.home)
+    if args.command == "auth":
+        if args.auth_command == "login":
+            if not args.client_id:
+                raise AtlasError("请提供 --client-id 或 ATLAS_X_CLIENT_ID。")
+            with process_lock(home):
+                login(home, args.client_id, args.port, os.getenv("ATLAS_X_CLIENT_SECRET"))
+            return {"authorized": True}
+        adapter = factories_for(args, home)[args.mode]()
+        try:
+            identity = adapter.identity()
+            return {
+                "site": identity.site,
+                "adapter": args.mode,
+                "account_id": identity.account_id,
+                "username": identity.username,
+            }
+        finally:
+            adapter.close()
+    if args.command == "sync":
+        return cycle(args, home)
+    if args.command == "serve":
+        if args.interval < 60:
+            raise AtlasError("同步间隔至少为 60 秒；建议从 6 小时开始。")
+        while True:
+            try:
+                result = cycle(args, home)
+                if args.once:
+                    return result
+                if result["added"] or result["updated"] or result.get("analysis", {}).get("failed"):
+                    print(json.dumps(result, ensure_ascii=False), flush=True)
+                wait = args.interval
+            except AtlasError as exc:
+                if args.once:
+                    raise
+                print(
+                    json.dumps({"error": str(exc)}, ensure_ascii=False), file=sys.stderr, flush=True
+                )
+                wait = (
+                    max(args.interval, exc.retry_at - time.time())
+                    if isinstance(exc, RateLimitError)
+                    else args.interval
+                )
+            time.sleep(wait)
+    with process_lock(home):
+        store = Store(home)
+        try:
+            if args.command == "status":
+                return store.stats()
+            if args.command == "search":
+                return [r["document"] for r in store.items(args.query, args.limit)]
+            engine = engine_for(args)
+            if args.command == "analyze":
+                return analyze_pending(store, engine, args.limit)
+            if args.command == "export":
+                target = (
+                    (
+                        args.out
+                        or home / ("exports/bookmarks.json" if args.format == "json" else "reports")
+                    )
+                    .expanduser()
+                    .resolve()
+                )
+                return (
+                    export_json(store, target)
+                    if args.format == "json"
+                    else export_markdown(store, target, engine.name)
+                )
+        finally:
+            store.close()
+
+
+def main():
+    # Database sidecars and private exports inherit restrictive permissions.
+    os.umask(0o077)
+    try:
+        result = run(parser().parse_args())
+        if result is not None:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        if isinstance(result, dict) and (
+            result.get("failed") or result.get("analysis", {}).get("failed")
+        ):
+            return 1
+        return 0
+    except AtlasError as exc:
+        print(json.dumps({"error": str(exc)}, ensure_ascii=False), file=sys.stderr)
+        return 2 if isinstance(exc, RateLimitError) else 1
+    except KeyboardInterrupt:
+        print("已停止；已提交的数据和续传位置保留。", file=sys.stderr)
+        return 130
+    except Exception as exc:
+        # No raw exception text: dependencies may embed headers or response bodies.
+        print(
+            json.dumps(
+                {"error": "运行失败，请检查配置、文件权限或升级程序。", "type": type(exc).__name__},
+                ensure_ascii=False,
+            ),
+            file=sys.stderr,
+        )
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
