@@ -60,7 +60,7 @@ def login(
             "response_type": "code",
             "client_id": client_id,
             "redirect_uri": redirect,
-            "scope": "tweet.read users.read bookmark.read offline.access",
+            "scope": "tweet.read users.read bookmark.read follows.read offline.access",
             "state": state,
             "code_challenge": challenge,
             "code_challenge_method": "S256",

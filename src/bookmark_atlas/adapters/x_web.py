@@ -84,6 +84,14 @@ def parse_tweet(value: dict) -> Item | None:
         str(item_id),
         html.unescape(note.get("text") or legacy["full_text"]),
         f"https://x.com/i/status/{item_id}",
+        kind="repost"
+        if legacy.get("retweeted_status_result")
+        else "reply"
+        if legacy.get("in_reply_to_status_id_str")
+        else "quote"
+        if legacy.get("is_quote_status")
+        else "post",
+        language=legacy.get("lang", ""),
         author_id=user.get("rest_id") or legacy.get("user_id_str", ""),
         author=username,
         published_at=stamp,
@@ -168,7 +176,8 @@ def identity_from_html(source: str) -> Identity:
         raise AuthError("X 当前页面没有有效的登录账号，无法绑定本地归档。") from exc
 
 
-def discover(client: httpx.Client) -> tuple[str, dict, Identity]:
+def discover(client: httpx.Client, required=None) -> tuple[str, dict, Identity]:
+    required = set(required or ["Bookmarks"])
     response = request(client, "GET", "https://x.com/i/bookmarks")
     source = response.text
     identity = identity_from_html(source)
@@ -176,7 +185,9 @@ def discover(client: httpx.Client) -> tuple[str, dict, Identity]:
     queue = deque(urljoin("https://x.com", u) for u in urls)
     # Webpack lazy chunks are described by separate name/hash maps in the bootstrap.
     # Prefer bookmark chunks; do not execute remote JavaScript.
-    for match in re.finditer(r'(\d+):"([^"\n]*Bookmarks[^"\n]*)"', source):
+    for match in re.finditer(
+        r'(\d+):"([^"\n]*(?:Bookmarks|UserProfile|Profile|FollowLists|Following)[^"\n]*)"', source
+    ):
         hashes = re.findall(r"\b" + match[1] + r':"([0-9a-f]{16})"', source)
         if hashes:
             queue.append(
@@ -201,16 +212,16 @@ def discover(client: httpx.Client) -> tuple[str, dict, Identity]:
             token, found = metadata_from_script(script)
             bearer = bearer or token
             operations.update(found)
-            if bearer and "Bookmarks" in operations:
+            if bearer and required.issubset(operations):
                 return bearer, operations, identity
             imports = re.findall(
                 r'["\x27]((?:\./|https://abs\.twimg\.com/)[^"\x27\s]+\.js)["\x27]', script
             )
             queue.extend(urljoin(url, u) for u in imports)
-    if bearer and "Bookmarks" in operations:
+    if bearer and required.issubset(operations):
         return bearer, operations, identity
     raise UnavailableError(
-        "无法从 X 当前网页发现 Bookmarks 接口；网页入口需适配当前版本，可改用官方 API。"
+        "无法从 X 当前网页发现所需接口；网页入口需适配当前版本，可改用官方 API。"
     )
 
 
@@ -267,6 +278,14 @@ class XWeb:
 
     def _graphql(self, operation: str, variables: dict) -> dict:
         self._prepare()
+        if operation not in self._metadata[1]:
+            token, operations, identity = discover(self.client, [operation])
+            if identity.account_id != self._metadata[2].account_id:
+                from ..models import OwnerMismatch
+
+                raise OwnerMismatch("发现接口时登录账号发生变化，已停止采集。")
+            self._metadata = (token, self._metadata[1] | operations, identity)
+            self.client.headers["Authorization"] = f"Bearer {token}"
         info = self._metadata[1][operation]
         features = {name: True for name in info.get("features", [])}
         features.update(

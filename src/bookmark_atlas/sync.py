@@ -37,7 +37,15 @@ def process_lock(home: Path):
 
 
 def sync_one(
-    store: Store, adapter, *, max_pages=50, full=False, overlap_pages=2, delay=2, sleep=time.sleep
+    store: Store,
+    adapter,
+    *,
+    max_pages=50,
+    full=False,
+    overlap_pages=2,
+    delay=2,
+    sleep=time.sleep,
+    collection="bookmarks",
 ) -> dict:
     if max_pages < 1 or overlap_pages < 1 or delay < 0:
         raise ValueError("分页与间隔参数无效")
@@ -45,9 +53,10 @@ def sync_one(
     store.bind_owner(identity)
     if store.cooldown(identity.site) > time.time():
         raise RateLimitError(store.cooldown(identity.site))
-    known = store.known(identity)
-    saved = None if full else store.checkpoint(identity.site, adapter.name)
-    run_id = store.start(identity.site, adapter.name)
+    known = store.known(identity, collection)
+    stream = adapter.name if collection == "bookmarks" else f"{adapter.name}:{collection}"
+    saved = None if full else store.checkpoint(identity.site, stream)
+    run_id = store.start(identity.site, stream)
     cursor = None
     seen_cursors = set()
     known_streak = 0
@@ -74,7 +83,7 @@ def sync_one(
                 checkpoint = None  # Reached the end without needing the old cursor.
             elif overlap:
                 checkpoint = saved
-            store.commit_page(identity, adapter.name, run_id, page, cursor, checkpoint)
+            store.commit_page(identity, stream, run_id, page, cursor, checkpoint, collection)
             if exhausted:
                 store.finish(run_id, "complete")
                 return store.run(run_id)

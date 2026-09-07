@@ -27,7 +27,7 @@ uv run bookmark-atlas auth check --mode api
 uv run bookmark-atlas sync --mode api
 ```
 
-OAuth uses `tweet.read users.read bookmark.read offline.access`. Use `ATLAS_X_CLIENT_SECRET` for a confidential client. `auth login` stores refreshable credentials privately. `ATLAS_X_ACCESS_TOKEN` also accepts an existing user token, without automatic refresh. App-only bearer tokens cannot replace user authorization. See [X OAuth documentation](https://docs.x.com/fundamentals/authentication/oauth-2-0/authorization-code).
+OAuth uses `tweet.read users.read bookmark.read follows.read offline.access`. Use `ATLAS_X_CLIENT_SECRET` for a confidential client. `auth login` stores refreshable credentials privately. `ATLAS_X_ACCESS_TOKEN` also accepts an existing user token, without automatic refresh. App-only bearer tokens cannot replace user authorization. See [X OAuth documentation](https://docs.x.com/fundamentals/authentication/oauth-2-0/authorization-code).
 
 `--mode auto` tries API first, with a conservative pre-write fallback to web; use `--prefer web` to reverse the order. It never switches to bypass a rate limit or an account mismatch. Standard proxy environment variables, system HTTPS proxy settings and `ATLAS_PROXY` are supported.
 
@@ -58,3 +58,5 @@ Rule processing produces excerpts, not generated summaries or fact checks. Ollam
 Each sync checks the newest bookmarks before resuming unfinished history. A newly bookmarked old post counts as new. Two entirely known pages form the normal overlap boundary. `--full` disables that early stop; `--max-pages` bounds a run. The default limit is 50 pages.
 
 `partial` means the page budget was reached; run again to continue. `complete` means the current endpoint ended, not that deleted or inaccessible posts were recovered. `incremental` means the known overlap boundary was reached. Missing posts remain in the archive. Media metadata is saved, while media binaries, whole threads and linked-page bodies are outside the current scope.
+
+[定向作者与关注列表采集 / Directed authors and following lists](watch.md)

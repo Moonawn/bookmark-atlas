@@ -34,6 +34,19 @@ def parse_page(body: dict) -> Page:
                 item_id=post["id"],
                 text=text,
                 url=f"https://x.com/i/status/{post['id']}",
+                kind=next(
+                    (
+                        kind
+                        for ref, kind in [
+                            ("retweeted", "repost"),
+                            ("replied_to", "reply"),
+                            ("quoted", "quote"),
+                        ]
+                        if any(r.get("type") == ref for r in post.get("referenced_tweets", []))
+                    ),
+                    "post",
+                ),
+                language=post.get("lang", ""),
                 author_id=post.get("author_id", ""),
                 author=user.get("username", ""),
                 published_at=post.get("created_at", ""),

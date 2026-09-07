@@ -160,3 +160,5 @@ uv build
 支持范围和测试覆盖见 [兼容性说明](verification.md)。网页接口会随 X 更新变化；遇到结构变化会报错，避免将错误响应当作空收藏。首版保存媒体元数据，不下载图片/视频二进制，不展开完整线程或外链正文；暂不支持收藏夹结构同步和其他站点。
 
 [架构与站点扩展](architecture.md) · [贡献指南](../CONTRIBUTING.md) · [安全与隐私](../SECURITY.md) · [MIT License](../LICENSE)
+
+[定向作者与关注列表采集 / Directed authors and following lists](watch.md)

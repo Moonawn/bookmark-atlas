@@ -10,6 +10,7 @@ from pathlib import Path
 from .config import atomic_write, private_dir
 from .export import export_markdown, safe_text
 from .models import AtlasError, digest, now
+from .taxonomy import classify, load_taxonomy
 
 
 def source_key(item):
@@ -43,6 +44,7 @@ def manifest_for(target):
 
 def export_wiki(store, target: Path, engine: str):
     private_dir(target)
+    taxonomy = load_taxonomy(target)
     export_markdown(store, target / "sources", engine)
     private_dir(target / "notes")
     private_dir(target / "personal")
@@ -78,10 +80,23 @@ def export_wiki(store, target: Path, engine: str):
         "## 知识笔记",
         "",
     ]
+    grouped = defaultdict(list)
     for p in sorted((target / "notes").glob("*.md")):
         first = p.read_text().splitlines()
         label = first[0][2:] if first and first[0].startswith("# ") else safe_text(p.stem)
-        index.append(f"- [{label}](notes/{p.name})")
+        meta_path = p.with_suffix(".meta.json")
+        try:
+            meta = classify(
+                json.loads(meta_path.read_text()) if meta_path.exists() else {}, taxonomy
+            )
+        except (ValueError, OSError) as exc:
+            raise AtlasError("知识笔记分类元数据损坏。") from exc
+        for topic in meta["topics"]:
+            grouped[topic].append(
+                f"- [{label}](notes/{p.name}) · {safe_text(taxonomy['note_types'][meta['type']])}"
+            )
+    for topic, entries in grouped.items():
+        index += [f"### {safe_text(taxonomy['topics'][topic])}", "", *entries, ""]
     index += [
         "",
         f"待 Agent 整理：{len(queue)} 条。",
@@ -105,9 +120,11 @@ def apply_notes(store, target: Path, payload: dict):
         or not payload["notes"]
     ):
         raise AtlasError("Wiki 输入需要非空 notes 数组。")
+    taxonomy = load_taxonomy(target)
     rows = {source_key(r["document"]): r for r in store.items()}
     manifest = manifest_for(target)
     outputs, handled = {}, defaultdict(list)
+    classifications = {}
     for note in payload["notes"]:
         if not isinstance(note, dict):
             raise AtlasError("Wiki 笔记必须是对象。")
@@ -120,6 +137,14 @@ def apply_notes(store, target: Path, payload: dict):
             raise AtlasError("Wiki 笔记 ID 无效或重复。")
         if not all(isinstance(note.get(k), str) and note[k].strip() for k in ("title", "body")):
             raise AtlasError("Wiki 笔记需要 title 和 body。")
+        meta_path = target / "notes" / f"{slug}.meta.json"
+        try:
+            previous_meta = json.loads(meta_path.read_text()) if meta_path.exists() else {}
+            if not isinstance(previous_meta, dict):
+                raise ValueError("object required")
+        except (ValueError, OSError) as exc:
+            raise AtlasError("已有知识笔记分类元数据损坏，请先修复。") from exc
+        classifications[slug] = classify(previous_meta | note, taxonomy)
         refs = note.get("sources")
         if not isinstance(refs, list) or not refs:
             raise AtlasError("每条知识笔记必须附上来源。")
@@ -151,6 +176,10 @@ def apply_notes(store, target: Path, payload: dict):
         for key, entry in manifest.items():
             if slug in entry["notes"] and key not in keys:
                 raise AtlasError("更新已有知识笔记时需要保留它的全部来源。")
+        if classifications[slug]["related"]:
+            lines += ["", "## 相关知识", ""] + [
+                f"- [{r}]({r}.md)" for r in classifications[slug]["related"]
+            ]
         outputs[slug] = "\n".join(lines) + "\n"
     for key, slugs in handled.items():
         prior = manifest.get(key, {})
@@ -158,9 +187,19 @@ def apply_notes(store, target: Path, payload: dict):
             prior["notes"]
         ).issubset(slugs):
             raise AtlasError("原文已变化，请一并更新与该来源关联的全部知识笔记。")
+    for slug, meta in classifications.items():
+        for related in meta["related"]:
+            if related == slug or (
+                related not in outputs and not (target / "notes" / f"{related}.md").is_file()
+            ):
+                raise AtlasError("关联笔记不存在或指向自身。")
     private_dir(target / "notes")
     for slug, content in outputs.items():
         atomic_write(target / "notes" / f"{slug}.md", content)
+        atomic_write(
+            target / "notes" / f"{slug}.meta.json",
+            json.dumps(classifications[slug], ensure_ascii=False, indent=2),
+        )
     for key, slugs in handled.items():
         prior = manifest.get(key, {})
         if prior.get("hash") == rows[key]["content_hash"]:
@@ -169,4 +208,13 @@ def apply_notes(store, target: Path, payload: dict):
     atomic_write(target / "manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
     receipt = {"at": now(), "notes": list(outputs), "sources": len(handled)}
     atomic_write(target / "last-compile.json", json.dumps(receipt, ensure_ascii=False, indent=2))
+    log = target / "log.md"
+    previous = log.read_text() if log.exists() else "# Wiki 更新记录\n"
+    atomic_write(
+        log,
+        previous
+        + f"\n## {receipt['at']} · 整理\n\n"
+        + "\n".join(f"- [{slug}](notes/{slug}.md)" for slug in outputs)
+        + "\n",
+    )
     return receipt

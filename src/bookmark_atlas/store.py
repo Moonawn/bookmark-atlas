@@ -33,7 +33,12 @@ CREATE TABLE IF NOT EXISTS analysis_failures(
  PRIMARY KEY(site,item_id,engine));
 CREATE TABLE IF NOT EXISTS changes(
  id INTEGER PRIMARY KEY, run_id INTEGER, site TEXT, item_id TEXT, kind TEXT, content_hash TEXT);
-PRAGMA user_version=1;
+CREATE TABLE IF NOT EXISTS collection_memberships(
+ site TEXT, account_id TEXT, collection TEXT, item_id TEXT, first_seen TEXT, last_seen TEXT,
+ PRIMARY KEY(site,account_id,collection,item_id));
+INSERT OR IGNORE INTO collection_memberships
+ SELECT site,account_id,'bookmarks',item_id,first_seen,last_seen FROM memberships;
+PRAGMA user_version=2;
 """
 
 
@@ -69,6 +74,8 @@ def content_digest(document: dict) -> str:
     # Source metadata such as video views/owner counters changes independently of
     # the saved content. Preserve it, but do not trigger a new analysis for it.
     stable = dict(document)
+    stable.pop("kind", None)
+    stable.pop("language", None)
     stable["media"] = [
         {
             key: value
@@ -89,7 +96,7 @@ class Store:
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA journal_mode=WAL")
         version = self.db.execute("PRAGMA user_version").fetchone()[0]
-        if version > 1:
+        if version > 2:
             self.db.close()
             raise RuntimeError("数据库版本高于当前程序，请升级 Bookmark Atlas。")
         self.db.executescript(SCHEMA)
@@ -133,12 +140,12 @@ class Store:
         ).fetchone()
         return row[0] if row else None
 
-    def known(self, identity: Identity) -> set[str]:
+    def known(self, identity: Identity, collection="bookmarks") -> set[str]:
         return {
             r[0]
             for r in self.db.execute(
-                "SELECT item_id FROM memberships WHERE site=? AND account_id=?",
-                (identity.site, identity.account_id),
+                "SELECT item_id FROM collection_memberships WHERE site=? AND account_id=? AND collection=?",
+                (identity.site, identity.account_id, collection),
             )
         }
 
@@ -150,6 +157,7 @@ class Store:
         page: Page,
         cursor: str | None,
         checkpoint: str | None,
+        collection: str = "bookmarks",
     ) -> tuple[int, int]:
         added = updated = 0
         stamp = now()
@@ -172,8 +180,8 @@ class Store:
                 )
                 hashed = content_digest(document)
                 member = self.db.execute(
-                    "SELECT 1 FROM memberships WHERE site=? AND account_id=? AND item_id=?",
-                    (identity.site, identity.account_id, item.item_id),
+                    "SELECT 1 FROM collection_memberships WHERE site=? AND account_id=? AND collection=? AND item_id=?",
+                    (identity.site, identity.account_id, collection, item.item_id),
                 ).fetchone()
                 kind = "new" if not member else "updated" if old["content_hash"] != hashed else None
                 added += kind == "new"
@@ -190,9 +198,14 @@ class Store:
                     ),
                 )
                 self.db.execute(
-                    "INSERT INTO memberships VALUES(?,?,?,?,?) ON CONFLICT(site,account_id,item_id) DO UPDATE SET last_seen=excluded.last_seen",
-                    (identity.site, identity.account_id, item.item_id, stamp, stamp),
+                    "INSERT INTO collection_memberships VALUES(?,?,?,?,?,?) ON CONFLICT(site,account_id,collection,item_id) DO UPDATE SET last_seen=excluded.last_seen",
+                    (identity.site, identity.account_id, collection, item.item_id, stamp, stamp),
                 )
+                if collection == "bookmarks":
+                    self.db.execute(
+                        "INSERT INTO memberships VALUES(?,?,?,?,?) ON CONFLICT(site,account_id,item_id) DO UPDATE SET last_seen=excluded.last_seen",
+                        (identity.site, identity.account_id, item.item_id, stamp, stamp),
+                    )
                 self.db.execute(
                     "INSERT INTO origins VALUES(?,?,?,?) ON CONFLICT(site,item_id,adapter) DO UPDATE SET last_seen=excluded.last_seen",
                     (item.site, item.item_id, adapter, stamp),
@@ -238,6 +251,13 @@ class Store:
                 not in json.dumps(value["document"], ensure_ascii=False).casefold()
             ):
                 continue
+            value["collections"] = [
+                r[0]
+                for r in self.db.execute(
+                    "SELECT DISTINCT collection FROM collection_memberships WHERE site=? AND item_id=? ORDER BY collection",
+                    (value["site"], value["item_id"]),
+                )
+            ]
             rows.append(value)
             if limit and len(rows) >= limit:
                 break

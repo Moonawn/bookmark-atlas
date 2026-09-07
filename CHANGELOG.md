@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0 — 2026-09-07
+
+- Directed collection from selected X authors and following lists, with rolling time windows, keyword/language filters, original/quote selection and bounded author rotation.
+- Separate collection memberships and progress, shared post deduplication, and integration into existing sync schedules.
+- Editable Wiki topics and note types, validated related-note links and an update log. Existing note classifications survive content-only updates.
+- Updated Chinese/English introductions, a directly downloadable Agent Skill, and the moon-themed project illustration.
+- SQLite schema v2 migrates existing bookmark memberships automatically. Back up the private archive before upgrading; v0.2 cannot open a v2 database.
+
 ## 0.2.0 — 2026-09-07
 
 - Interactive setup for collection, timezone, daily or interval scheduling, and organization preferences.

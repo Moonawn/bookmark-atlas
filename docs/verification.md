@@ -3,7 +3,7 @@
 ## Supported environments
 
 - Python 3.11–3.13 on macOS and Linux.
-- X Bookmarks through an OAuth user token or an authenticated browser session.
+- X bookmarks and directed author collection through an OAuth user token or an authenticated browser session.
 - Chrome on macOS has live integration coverage. Firefox, Brave, Edge, Chromium and Quark adapters require verification against the selected browser profile.
 - Official API access requires an X Developer App, the appropriate OAuth scopes and available API credits.
 - Model summaries require a running local Ollama service and an installed model.
@@ -12,9 +12,9 @@
 
 | Component | Coverage |
 |---|---|
-| Archive and adapters | 69 automated cases covering normalization, paging, merging, transactions, recovery, setup, scheduling and Wiki provenance |
-| X web adapter | Live authentication, historical collection, repeat sync and automatic adapter selection |
-| Official X API | Mock HTTP coverage for identity, paging, expansions, long posts, errors and token refresh; live OAuth validation remains pending |
+| Archive and adapters | 89 automated cases covering normalization, paging, merging, transactions, recovery, setup, scheduling and Wiki provenance |
+| X web adapter | Live authentication, historical collection, repeat sync, Following and UserTweets access, and automatic adapter selection |
+| Official X API | Mock HTTP coverage for identity, paging, expansions, long posts, author/following routes, errors and token refresh; live OAuth validation remains pending |
 | Ollama | Mock HTTP coverage for output validation, retries and local endpoint restrictions; live model validation remains pending |
 | Distribution | wheel and source builds; clean-environment installation and CLI execution |
 | CI | macOS and Linux with Python 3.11, 3.12 and 3.13 |

@@ -35,6 +35,8 @@ class Item:
     published_at: str = ""
     links: list[str] = field(default_factory=list)
     media: list[dict] = field(default_factory=list)
+    language: str = ""
+    kind: str = "post"
 
     def to_dict(self) -> dict:
         return asdict(self)

@@ -18,6 +18,7 @@ from .oauth import login
 from .preferences import load, next_daily, setup, validate
 from .store import Store
 from .sync import process_lock, sync
+from .watch import read_rules, run_watches, save_rule
 from .wiki import apply_notes, export_wiki
 
 
@@ -66,6 +67,29 @@ def parser():
             cmd.add_argument(
                 "--once", action="store_true", help="执行一轮后退出，用于系统调度和验证"
             )
+    watch = commands.add_parser("watch", help="配置作者与关注列表的定向采集").add_subparsers(
+        dest="watch_command", required=True
+    )
+    watch.add_parser("list")
+    add = watch.add_parser("add")
+    add.add_argument("name")
+    add.add_argument("--authors", default="", help="逗号分隔，不带 @")
+    add.add_argument("--following", action="store_true")
+    add.add_argument("--keywords", default="", help="逗号分隔，任一词命中即可")
+    add.add_argument("--days", type=positive, default=7)
+    add.add_argument("--kinds", default="post,quote")
+    add.add_argument("--language", default="")
+    add.add_argument("--max-authors", type=positive, default=20)
+    add.add_argument("--max-pages", type=positive, default=5)
+    for action in ("enable", "disable"):
+        toggle = watch.add_parser(action)
+        toggle.add_argument("name")
+    collect = watch.add_parser("sync")
+    collect.add_argument("name", nargs="?")
+    collect.add_argument("--mode", choices=["auto", "api", "web"])
+    collect.add_argument("--prefer", choices=["api", "web"], default="api")
+    collect.add_argument("--browser")
+    collect.add_argument("--cookie-file")
     cmd = commands.add_parser("analyze", help="分析新增或变更内容，失败可重试")
     cmd.add_argument("--ollama-model")
     cmd.add_argument("--limit", type=positive, default=100)
@@ -118,6 +142,12 @@ def cycle(args, home):
                 full=args.full,
                 overlap_pages=args.overlap_pages,
             )
+            try:
+                result["watch"] = run_watches(
+                    store, home, factories_for(args, home), mode=args.mode, preferred=args.prefer
+                )
+            except AtlasError as exc:
+                result["watch"] = {"failed": True, "error": str(exc)}
             if not args.no_analyze:
                 engine = engine_for(args)
                 result["analysis"] = analyze_pending(store, engine, limit=500)
@@ -159,6 +189,51 @@ def run(args):
             }
         finally:
             adapter.close()
+    if args.command == "watch":
+        with process_lock(home):
+            rules = read_rules(home)
+            if args.watch_command == "list":
+                return rules
+            if args.watch_command == "add":
+                values = {
+                    k: getattr(args, k)
+                    for k in ("following", "days", "language", "max_authors", "max_pages")
+                }
+                for key in ("authors", "keywords", "kinds"):
+                    values[key] = [
+                        v.strip().lstrip("@") if key == "authors" else v.strip()
+                        for v in getattr(args, key).split(",")
+                        if v.strip()
+                    ]
+                return save_rule(home, args.name, values)
+            if args.watch_command in ("enable", "disable"):
+                if args.name not in rules:
+                    raise AtlasError("规则不存在。")
+                return save_rule(
+                    home, args.name, rules[args.name] | {"enabled": args.watch_command == "enable"}
+                )
+            store = Store(home)
+            try:
+                result = run_watches(
+                    store,
+                    home,
+                    factories_for(args, home),
+                    mode=args.mode,
+                    preferred=args.prefer,
+                    name=args.name,
+                )
+                engine = (
+                    OllamaAnalysis(settings["ollama_model"])
+                    if settings["ollama_model"]
+                    else LocalAnalysis()
+                )
+                result["analysis"] = analyze_pending(store, engine, limit=500)
+                result["report"] = export_markdown(store, home / "reports", engine.name)
+                if settings["organization"] == "wiki":
+                    result["wiki"] = export_wiki(store, home / "wiki", engine.name)
+                return result
+            finally:
+                store.close()
     if args.command == "sync":
         return cycle(args, home)
     if args.command == "serve":
@@ -182,7 +257,12 @@ def run(args):
                 result = cycle(args, home)
                 if args.once:
                     return result
-                if result["added"] or result["updated"] or result.get("analysis", {}).get("failed"):
+                if (
+                    result["added"]
+                    or result["updated"]
+                    or result.get("analysis", {}).get("failed")
+                    or any(result.get("watch", {}).get(k) for k in ("added", "updated", "failed"))
+                ):
                     print(json.dumps(result, ensure_ascii=False), flush=True)
                 wait = args.interval
             except AtlasError as exc:
@@ -261,7 +341,9 @@ def main():
         if result is not None:
             print(json.dumps(result, ensure_ascii=False, indent=2))
         if isinstance(result, dict) and (
-            result.get("failed") or result.get("analysis", {}).get("failed")
+            result.get("failed")
+            or result.get("analysis", {}).get("failed")
+            or result.get("watch", {}).get("failed")
         ):
             return 1
         return 0

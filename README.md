@@ -2,23 +2,25 @@
 
 # Bookmark Atlas
 
-### 让收藏不止于收藏，让知识开始复利。
+### 收藏有去处，想用找得到。
 
 **简体中文** · [English](README.en.md)
 
-[快速开始](#快速开始) · [交给 Agent](#交给-agent) · [使用指南](docs/usage.zh-CN.md) · [下载](https://github.com/Moonawn/bookmark-atlas/releases)
+[快速开始](#快速开始) · [交给 Agent](#交给-agent) · [使用指南](docs/usage.zh-CN.md) · [下载](https://github.com/Moonawn/bookmark-atlas/releases) · [安装 Skill](#交给-agent)
 
 [![CI](https://github.com/Moonawn/bookmark-atlas/actions/workflows/ci.yml/badge.svg)](https://github.com/Moonawn/bookmark-atlas/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 </div>
 
-每天刷了很多推，真正留下的却很少。消息更新太快，没时间梳理；遇到好内容，又要复制链接、攒成一批，再交给 Agent。
+**目前支持 X：收藏同步、指定作者和关注列表的条件采集。其他平台开发中。**
 
-**一次设置，照常收藏。** Bookmark Atlas 按你设定的节奏，把 X 收藏同步到本地，保留原文与来源，再按你选择的方式整理。
+每天刷过很多内容，想用时却找不到；收藏夹越来越满，整理总留给以后。
 
-收藏只是起点。让值得留下的内容被总结、关联和反复回看，让今天存下的一个想法，成为明天能用上的知识。
+**一次设置，照常收藏。** Bookmark Atlas 按你的节奏，把值得留下的内容存到本地。无需反复复制链接：保留原文、整理主题，也可以交给 Agent，逐步形成有来源、有关联的知识笔记。
 
-> 更新频率由你定，整理方式由你选。知识复利，来自每一次有依据的整理、连接与使用。
+今天留下的内容，下次遇到问题时能找回、能对照、能接着用。
+
+![Bookmark Atlas：月亮、书页与本地知识地图](assets/hero.png)
 
 ## 从一个收藏开始
 
@@ -81,6 +83,11 @@ uv run bookmark-atlas sync --mode api
 
 ## 交给 Agent
 
+[**下载 Skill 安装包（v0.3.0）**](https://github.com/Moonawn/bookmark-atlas/releases/download/v0.3.0/bookmark-atlas-skill-0.3.0.zip) · [查看 Skill](skills/bookmark-atlas/SKILL.md) · [安装说明](docs/wiki.md#使用-skill--use-the-skill)
+
+解压后，将整个 `bookmark-atlas/` 文件夹放入所用 Agent 支持的 Skills 目录；也可以让 Agent 直接读取仓库中的 Skill。先按上面的步骤安装 CLI。
+
+
 Bookmark Atlas 提供可独立运行的 CLI，也附带 [Agent Skill](skills/bookmark-atlas/SKILL.md)。让 Agent 读取这个 Skill，即可引导设置、执行同步并整理 Wiki。
 
 > 帮我设置 Bookmark Atlas。先问我同步时间、时区和整理方式；如果选择 LLM Wiki，就保留原文，把相关收藏提炼成有来源的知识笔记。
@@ -93,13 +100,29 @@ Bookmark Atlas 提供可独立运行的 CLI，也附带 [Agent Skill](skills/boo
 
 Wiki 将原始资料、生成笔记和人工笔记分开保存。生成内容带来源，人工笔记不会被导出过程覆盖。知识库保存在你的本地；选择 Agent 时，资料会进入你所使用的 Agent 服务上下文。
 
+Wiki 工作流受 [Andrej Karpathy 的 LLM Wiki 模式](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)启发：保留来源，持续整理、连接和修订。分类采用可配置的“主题＋笔记类型”，无法确定的内容先放入待分类。
+
 [了解 Wiki 整理与 Skill 使用 →](docs/wiki.md)
+
+## 持续关注作者
+
+收藏是手动选择，定向采集适合持续跟进。指定作者，或从自己的关注列表中选择范围，再按时间、关键词、语言与原创／引用类型筛选。
+
+```sh
+# 示例：替换为你要跟进的作者
+uv run bookmark-atlas watch add research --authors example_author --days 7 --keywords "Agent,Wiki" --kinds post
+uv run bookmark-atlas watch sync research
+```
+
+启用的规则会随后续 `sync` 和已有定时任务执行。收藏与各条规则分别记录采集进度，同一篇内容只存一份。关注人数较多时分批轮转，每轮是否完成会在结果中显示。
+
+[关注列表、筛选规则与暂停方法 →](docs/watch.md)
 
 ## 你始终掌握自己的资料
 
 SQLite 保存归档，Markdown 方便阅读，JSON 方便迁移。重复同步不重复添加；未出现在新一轮列表中的旧收藏仍会保留。模型整理失败时，原文和采集进度仍在，可以单独重试。
 
-目前支持 **当前账号的 X 收藏**。关注动态、指定作者条件采集、其他站点，以及图片视频文件下载尚未接入。网页接口随 X 更新可能变化；更多环境与测试范围见 [兼容性说明](docs/verification.md)。
+图片视频文件下载、完整讨论串与外链正文暂不采集。网页接口随 X 更新可能变化；更多环境与测试范围见 [兼容性说明](docs/verification.md)。
 
 ---
 

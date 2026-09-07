@@ -2,23 +2,25 @@
 
 # Bookmark Atlas
 
-### Turn saved posts into knowledge that compounds.
+### A home for what you save. Ready when you need it.
 
 [简体中文](README.md) · **English**
 
-[Quick start](#quick-start) · [Use with an Agent](#use-with-an-agent) · [User guide](docs/usage.en.md) · [Download](https://github.com/Moonawn/bookmark-atlas/releases)
+[Quick start](#quick-start) · [Use with an Agent](#use-with-an-agent) · [User guide](docs/usage.en.md) · [Download](https://github.com/Moonawn/bookmark-atlas/releases) · [Install Skill](#use-with-an-agent)
 
 [![CI](https://github.com/Moonawn/bookmark-atlas/actions/workflows/ci.yml/badge.svg)](https://github.com/Moonawn/bookmark-atlas/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 </div>
 
-You read plenty of posts. Far fewer become something you can use. News moves too fast to organize, and good finds turn into another batch of links to copy into an Agent.
+**Currently supports X: bookmarks and conditional collection from selected authors or your following list. Other platforms are in development.**
 
-**Set it up once. Keep bookmarking.** Bookmark Atlas syncs your X bookmarks to your computer on your schedule, preserves the original posts and sources, and organizes them the way you choose.
+You read plenty of posts, then struggle to find the useful ones when you need them. Your bookmarks grow; organizing them stays on the to-do list.
 
-Saving is a starting point. Summarize, connect and revisit what matters, so an idea you save today becomes knowledge you can apply tomorrow.
+**Set it up once. Keep bookmarking.** Bookmark Atlas saves useful material to your computer on your schedule. Preserve the original posts, organize topics, or ask your Agent to build connected notes with sources—without repeatedly copying batches of links.
 
-> Your schedule. Your way of organizing. Knowledge compounds through careful synthesis, connections and use.
+Find what you saved, check its context, and use it to work through your next question.
+
+![Bookmark Atlas: moon, pages and a local knowledge map](assets/hero.png)
 
 ## Start with a bookmark
 
@@ -81,6 +83,11 @@ uv run bookmark-atlas sync --mode api
 
 ## Use with an Agent
 
+[**Download the Skill (v0.3.0)**](https://github.com/Moonawn/bookmark-atlas/releases/download/v0.3.0/bookmark-atlas-skill-0.3.0.zip) · [Read the Skill](skills/bookmark-atlas/SKILL.md) · [Installation](docs/wiki.md#使用-skill--use-the-skill)
+
+Extract the archive and copy the entire `bookmark-atlas/` folder into your Agent host's supported Skills directory, or ask your Agent to read the repository Skill directly. Install the CLI first using the steps above.
+
+
 Bookmark Atlas runs as a CLI and includes an [Agent Skill](skills/bookmark-atlas/SKILL.md). Ask your Agent to read it to guide setup, sync your bookmarks and compile the Wiki.
 
 > Set up Bookmark Atlas for me. Ask about my schedule, timezone and organization preferences first. If I choose LLM Wiki, preserve the original posts and turn related sources into traceable knowledge notes.
@@ -93,13 +100,29 @@ Choose how much processing you want:
 
 The Wiki separates original sources, generated notes and personal writing. Generated notes cite their sources; exports preserve your personal notes. Files stay on your computer. If you select an Agent, source material enters that Agent service's context.
 
+The Wiki workflow is inspired by [Andrej Karpathy’s LLM Wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f): preserve sources, then synthesize, connect and revise. Configurable topics and note types organize the Wiki; uncertain classifications go to the inbox.
+
 [Wiki workflow and Skill usage →](docs/wiki.md)
+
+## Follow authors over time
+
+Choose authors or a subset of your following list, then filter by age, keywords, language and original/quote posts.
+
+```sh
+# Replace the example author with someone you want to follow
+uv run bookmark-atlas watch add research --authors example_author --days 7 --keywords "Agent,Wiki" --kinds post
+uv run bookmark-atlas watch sync research
+```
+
+Enabled rules run during future `sync` calls and existing schedules. Bookmarks and rules keep separate progress, while each post is stored once. Large author lists rotate through bounded batches, with completion information in each result.
+
+[Following lists, filters and pausing rules →](docs/watch.md)
 
 ## Keep control of your archive
 
 SQLite stores the archive, Markdown makes it readable, and JSON makes it portable. Repeated syncs do not duplicate unchanged items. Previously saved bookmarks remain even when missing from a later response. If analysis fails, the original material and sync progress remain available for a separate retry.
 
-Currently supports **the signed-in account's X bookmarks**. Following feeds, conditional author collection, other sites and image/video file downloads are not implemented. X website changes can affect the web adapter. See [compatibility and test coverage](docs/verification.md).
+Media file downloads, complete threads and linked-page bodies are outside the current scope. X website changes can affect the web adapter. See [compatibility and test coverage](docs/verification.md).
 
 ---
 
