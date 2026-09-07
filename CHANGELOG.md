@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0 — 2026-09-07
+
+- Interactive setup for collection, timezone, daily or interval scheduling, and organization preferences.
+- Daily wall-clock scheduling with explicit timezone and daylight-saving handling.
+- Agent Wiki queue, source-linked concept notes, content-hash validation and preserved personal notes.
+- A portable Agent Skill for guided setup, scheduling and knowledge compilation.
+- Chinese and English project homepages with shorter reading paths and dedicated usage guides.
+
+
 ## 0.1.0 — 2026-09-07
 
 Initial release of Bookmark Atlas.

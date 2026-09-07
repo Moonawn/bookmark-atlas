@@ -15,8 +15,10 @@ from .config import home_path
 from .export import export_json, export_markdown
 from .models import AtlasError, RateLimitError
 from .oauth import login
+from .preferences import load, next_daily, setup, validate
 from .store import Store
 from .sync import process_lock, sync
+from .wiki import apply_notes, export_wiki
 
 
 def positive(value):
@@ -36,12 +38,12 @@ def parser():
             name, help="同步收藏" if name == "sync" else "按间隔执行同步和整理"
         )
         cmd.add_argument("--site", choices=["x"], default="x")
-        cmd.add_argument("--mode", choices=["auto", "api", "web"], default="auto")
+        cmd.add_argument("--mode", choices=["auto", "api", "web"], default=None)
         cmd.add_argument("--prefer", choices=["api", "web"], default="api")
         cmd.add_argument(
             "--browser",
             choices=["chrome", "firefox", "brave", "edge", "chromium", "quark"],
-            default="chrome",
+            default=None,
         )
         cmd.add_argument("--cookie-file", help="指定浏览器配置的 Cookies 数据库路径")
         cmd.add_argument("--max-pages", type=positive, default=50)
@@ -50,12 +52,15 @@ def parser():
         )
         cmd.add_argument("--overlap-pages", type=positive, default=2)
         cmd.add_argument("--no-analyze", action="store_true")
+        cmd.add_argument("--organization", choices=["topics", "wiki"])
         cmd.add_argument("--ollama-model", help="使用已安装的本地 Ollama 模型生成中文摘要")
         if name == "serve":
+            cmd.add_argument("--at", help="每日运行时间 HH:MM")
+            cmd.add_argument("--timezone", help="IANA 时区，默认 Asia/Shanghai")
             cmd.add_argument(
                 "--interval",
                 type=positive,
-                default=21600,
+                default=None,
                 help="同步间隔秒数，默认 6 小时，最少 60 秒",
             )
             cmd.add_argument(
@@ -65,9 +70,14 @@ def parser():
     cmd.add_argument("--ollama-model")
     cmd.add_argument("--limit", type=positive, default=100)
     cmd = commands.add_parser("export", help="导出 JSON 或 Markdown 主题知识库")
-    cmd.add_argument("format", choices=["json", "markdown"])
+    cmd.add_argument("format", choices=["json", "markdown", "wiki"])
     cmd.add_argument("--out", type=Path)
     cmd.add_argument("--ollama-model")
+    commands.add_parser("setup", help="询问并保存同步时间和整理偏好")
+    commands.add_parser("settings", help="查看已保存的使用偏好")
+    wiki = commands.add_parser("wiki", help="接收 Agent 生成的带来源知识笔记")
+    wiki.add_argument("action", choices=["apply"])
+    wiki.add_argument("input", type=Path)
     commands.add_parser("status", help="查看本地归档与同步状态")
     cmd = commands.add_parser("search", help="搜索本地原文、作者和链接（支持中文子串）")
     cmd.add_argument("query")
@@ -86,7 +96,8 @@ def parser():
 
 
 def engine_for(args):
-    return OllamaAnalysis(args.ollama_model) if args.ollama_model else LocalAnalysis()
+    model = getattr(args, "ollama_model", None)
+    return OllamaAnalysis(model) if model else LocalAnalysis()
 
 
 def factories_for(args, home):
@@ -112,6 +123,8 @@ def cycle(args, home):
                 result["analysis"] = analyze_pending(store, engine, limit=500)
                 # Report updates are recoverable by re-running export.
                 result["report"] = export_markdown(store, home / "reports", engine.name)
+                if args.organization == "wiki":
+                    result["wiki"] = export_wiki(store, home / "wiki", engine.name)
             return result
         finally:
             store.close()
@@ -119,6 +132,15 @@ def cycle(args, home):
 
 def run(args):
     home = home_path(args.home)
+    if args.command == "setup":
+        with process_lock(home):
+            return setup(home)
+    settings = load(home)
+    if args.command == "settings":
+        return settings
+    for key in ("mode", "browser", "organization", "ollama_model"):
+        if hasattr(args, key) and getattr(args, key) is None:
+            setattr(args, key, settings[key])
     if args.command == "auth":
         if args.auth_command == "login":
             if not args.client_id:
@@ -140,9 +162,22 @@ def run(args):
     if args.command == "sync":
         return cycle(args, home)
     if args.command == "serve":
+        explicit_interval = args.interval is not None
+        args.interval = args.interval or settings["interval"]
+        daily = args.at or (
+            settings["at"] if settings["schedule"] == "daily" and not explicit_interval else None
+        )
+        timezone = args.timezone or settings["timezone"]
+        if daily:
+            validate(settings | {"at": daily, "timezone": timezone})
         if args.interval < 60:
             raise AtlasError("同步间隔至少为 60 秒；建议从 6 小时开始。")
+        retry_after = 0
         while True:
+            if daily and not args.once:
+                target = max(next_daily(daily, timezone, time.time()), retry_after)
+                while (remaining := target - time.time()) > 0:
+                    time.sleep(min(remaining, 30))
             try:
                 result = cycle(args, home)
                 if args.once:
@@ -161,7 +196,10 @@ def run(args):
                     if isinstance(exc, RateLimitError)
                     else args.interval
                 )
-            time.sleep(wait)
+            if daily:
+                retry_after = time.time() + wait
+            else:
+                time.sleep(wait)
     with process_lock(home):
         store = Store(home)
         try:
@@ -169,6 +207,20 @@ def run(args):
                 return store.stats()
             if args.command == "search":
                 return [r["document"] for r in store.items(args.query, args.limit)]
+            if args.command == "wiki":
+                try:
+                    payload = json.loads(args.input.expanduser().read_text())
+                except (OSError, ValueError) as exc:
+                    raise AtlasError("无法读取 Wiki 输入 JSON。") from exc
+                receipt = apply_notes(store, home / "wiki", payload)
+                receipt["wiki"] = export_wiki(
+                    store,
+                    home / "wiki",
+                    settings["ollama_model"]
+                    and f"ollama-v1:{settings['ollama_model']}"
+                    or LocalAnalysis.name,
+                )
+                return receipt
             engine = engine_for(args)
             if args.command == "analyze":
                 return analyze_pending(store, engine, args.limit)
@@ -176,7 +228,14 @@ def run(args):
                 target = (
                     (
                         args.out
-                        or home / ("exports/bookmarks.json" if args.format == "json" else "reports")
+                        or home
+                        / (
+                            {
+                                "json": "exports/bookmarks.json",
+                                "markdown": "reports",
+                                "wiki": "wiki",
+                            }[args.format]
+                        )
                     )
                     .expanduser()
                     .resolve()
@@ -184,7 +243,11 @@ def run(args):
                 return (
                     export_json(store, target)
                     if args.format == "json"
-                    else export_markdown(store, target, engine.name)
+                    else (
+                        export_wiki(store, target, engine.name)
+                        if args.format == "wiki"
+                        else export_markdown(store, target, engine.name)
+                    )
                 )
         finally:
             store.close()

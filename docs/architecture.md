@@ -46,3 +46,9 @@ Auto mode tries the preferred adapter, verifies identity and one bookmark page, 
 5. Document incomplete coverage and authentication expiry clearly.
 
 Potential future targets are GitHub Stars, Reddit saved items, YouTube playlists, and other explicitly authorized collections. They are roadmap candidates, not implemented features.
+
+## Preferences and Agent Wiki
+
+`preferences.py` validates private settings and computes daily runs in an explicit timezone. Saving settings does not activate a background service. CLI options override saved choices.
+
+`wiki.py` prepares generated source pages and a content-hash queue. An Agent reads these sources and submits structured notes through `wiki apply`. The whole batch is validated before notes are written; progress is saved only after all note writes. Changed sources return to the queue. Generated notes and user-authored `personal/` files are separate. The Agent Skill supplies the synthesis workflow; the CLI does not automatically call an Agent service.

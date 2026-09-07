@@ -12,7 +12,7 @@
 
 | Component | Coverage |
 |---|---|
-| Archive and adapters | 51 automated cases covering normalization, paging, merging, transactions and recovery |
+| Archive and adapters | 69 automated cases covering normalization, paging, merging, transactions, recovery, setup, scheduling and Wiki provenance |
 | X web adapter | Live authentication, historical collection, repeat sync and automatic adapter selection |
 | Official X API | Mock HTTP coverage for identity, paging, expansions, long posts, errors and token refresh; live OAuth validation remains pending |
 | Ollama | Mock HTTP coverage for output validation, retries and local endpoint restrictions; live model validation remains pending |
