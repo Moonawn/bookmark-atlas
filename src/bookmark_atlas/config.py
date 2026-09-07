@@ -17,8 +17,10 @@ def home_path(value: str | None = None) -> Path:
 
 
 def private_dir(path: Path) -> Path:
+    existed = path.exists()
     path.mkdir(parents=True, exist_ok=True, mode=0o700)
-    path.chmod(0o700)
+    if not existed:
+        path.chmod(0o700)
     return path
 
 

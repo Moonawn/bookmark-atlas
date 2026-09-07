@@ -354,3 +354,13 @@ def test_lazy_bookmark_chunk_discovery_and_asset_cookie_isolation(monkeypatch):
     assert identity.account_id == "123"
     assert operations["Bookmarks"]["query_id"] == "q"
     assert any("/bundle.Bookmarks.0123456789abcdefa.js" in p for p in paths)
+
+
+def test_export_write_does_not_change_existing_parent_permissions(tmp_path):
+    from bookmark_atlas.config import atomic_write
+
+    folder = tmp_path / "existing-documents"
+    folder.mkdir(mode=0o755)
+    atomic_write(folder / "report.md", "private report")
+    assert folder.stat().st_mode & 0o777 == 0o755
+    assert (folder / "report.md").stat().st_mode & 0o777 == 0o600

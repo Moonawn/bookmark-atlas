@@ -6,7 +6,7 @@ Date: 2026-09-07. The project was independently implemented in this repository. 
 
 | Area | Verification | Status |
 |---|---|---|
-| Core archive and adapters | 50 synthetic automated tests | Passed |
+| Core archive and adapters | 51 synthetic automated tests | Passed |
 | Code quality | Ruff lint and format checks | Passed |
 | Distribution | wheel + source distribution build | Passed |
 | Installation | wheel installed into a separate clean Python environment; version and database initialization | Passed |
