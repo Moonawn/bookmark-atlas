@@ -1,14 +1,14 @@
 <div align="center">
 
-# Bookmark Atlas
+#书签图谱
 
-### 收藏有去处，想用找得到。
+### 让收藏不再止于收藏。
 
 **简体中文** · [English](README.en.md)
 
 [快速开始](#快速开始) · [交给 Agent](#交给-agent) · [使用指南](docs/usage.zh-CN.md) · [下载](https://github.com/Moonawn/bookmark-atlas/releases) · [安装 Skill](#交给-agent)
 
-[![CI](https://github.com/Moonawn/bookmark-atlas/actions/workflows/ci.yml/badge.svg)](https://github.com/Moonawn/bookmark-atlas/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/Moonawn/bookmark-atlas/actions/workflows/ci.yml/badge.svg)](https://github.com/Moonawn/bookmark-atlas/actions/workflows/ci.yml) [![许可证：MIT](https://img.shields.io/badge/License-MIT-blue.svg)](许可证)
 
 </div>
 
@@ -16,11 +16,11 @@
 
 每天刷过很多内容，想用时却找不到；收藏夹越来越满，整理总留给以后。
 
-**一次设置，照常收藏。** Bookmark Atlas 按你的节奏，把值得留下的内容存到本地。无需反复复制链接：保留原文、整理主题，也可以交给 Agent，逐步形成有来源、有关联的知识笔记。
+**一次设置，收藏不止。** Bookmark Atlas 按你的节奏，把值得留下的内容存到本地。无需反复复制链接：保留原文、整理主题，也可以交给 Agent，逐步形成有来源、有关联的知识笔记。
 
 今天留下的内容，下次遇到问题时能找回、能对照、能接着用。
 
-![Bookmark Atlas：月亮、书页与本地知识地图](assets/hero.png)
+![书签图谱：月亮、书页与本地知识地图](assets/hero.png)
 
 ## 从一个收藏开始
 
