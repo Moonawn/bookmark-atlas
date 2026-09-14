@@ -19,7 +19,7 @@ from .preferences import load, next_daily, setup, validate
 from .store import Store
 from .sync import process_lock, sync
 from .watch import read_rules, run_watches, save_rule
-from .wiki import apply_notes, export_wiki
+from .wiki import apply_notes, export_wiki, wiki_status
 
 
 def positive(value):
@@ -284,7 +284,11 @@ def run(args):
         store = Store(home)
         try:
             if args.command == "status":
-                return store.stats()
+                result = store.stats()
+                wiki_home = home / "wiki"
+                if wiki_home.is_dir():
+                    result["wiki"] = wiki_status(store, wiki_home)
+                return result
             if args.command == "search":
                 return [r["document"] for r in store.items(args.query, args.limit)]
             if args.command == "wiki":

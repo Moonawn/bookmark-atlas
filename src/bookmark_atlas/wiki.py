@@ -42,6 +42,34 @@ def manifest_for(target):
         raise AtlasError("Wiki manifest 无效；请保留文件并修复，避免重复覆盖笔记。") from exc
 
 
+def _awaiting_notes(row, manifest, target):
+    """True when an item still needs Agent notes.
+
+    Covers never-compiled sources, content that changed since the last compile,
+    and a note file the manifest records but that is no longer on disk.
+    """
+    prior = manifest.get(source_key(row["document"]), {})
+    if prior.get("hash") != row["content_hash"] or not prior.get("notes"):
+        return True
+    return not all((target / "notes" / f"{n}.md").is_file() for n in prior["notes"])
+
+
+def wiki_status(store, target: Path):
+    """Backlog depth and last compile time, so `status` can show a stalled queue."""
+    manifest = manifest_for(target)
+    pending = sum(1 for row in store.items() if _awaiting_notes(row, manifest, target))
+    last = None
+    path = target / "last-compile.json"
+    if path.is_file():
+        try:
+            value = json.loads(path.read_text())
+            if isinstance(value, dict) and isinstance(value.get("at"), str):
+                last = value["at"]
+        except (OSError, ValueError):
+            last = None
+    return {"pending": pending, "last_compile": last}
+
+
 def export_wiki(store, target: Path, engine: str):
     private_dir(target)
     taxonomy = load_taxonomy(target)
@@ -51,15 +79,10 @@ def export_wiki(store, target: Path, engine: str):
     manifest = manifest_for(target)
     queue = []
     for row in store.items():
+        if not _awaiting_notes(row, manifest, target):
+            continue
         item = row["document"]
         key = source_key(item)
-        prior = manifest.get(key, {})
-        if (
-            prior.get("hash") == row["content_hash"]
-            and prior.get("notes")
-            and all((target / "notes" / f"{n}.md").is_file() for n in prior["notes"])
-        ):
-            continue
         queue.append(
             {
                 "key": key,

@@ -10,7 +10,7 @@ from bookmark_atlas.config import atomic_write
 from bookmark_atlas.models import AtlasError
 from bookmark_atlas.preferences import load, next_daily, setup, validate
 from bookmark_atlas.store import Store
-from bookmark_atlas.wiki import apply_notes, export_wiki
+from bookmark_atlas.wiki import apply_notes, export_wiki, wiki_status
 
 
 def stamp(iso):
@@ -186,3 +186,33 @@ def test_changed_source_must_update_all_related_notes(archive):
     refs.update({r["key"]: r for r in fresh})
     with pytest.raises(AtlasError, match="全部知识笔记"):
         apply_notes(store, target, payload(list(refs.values())))
+
+
+def test_wiki_status_never_drifts_from_export_queue(archive):
+    """status 的积压数必须与 export_wiki 的队列长度一致：两处共用同一判据。"""
+    store, target = archive
+    assert wiki_status(store, target) == {"pending": 2, "last_compile": None}
+    export_wiki(store, target, LocalAnalysis.name)
+    assert wiki_status(store, target)["pending"] == 2
+    queue = json.loads((target / "queue.json").read_text())["items"]
+    apply_notes(store, target, payload(queue))
+    compiled = wiki_status(store, target)
+    assert compiled["pending"] == 0
+    assert compiled["last_compile"] is not None
+    (target / "notes/knowledge-note.md").unlink()
+    assert (
+        wiki_status(store, target)["pending"]
+        == export_wiki(store, target, LocalAnalysis.name)["pending"]
+        == 2
+    )
+
+
+def test_status_recomputes_wiki_backlog_without_writing(archive):
+    """status 重算积压，既不依赖也可能过期的 queue.json，也不生成它。"""
+    store, target = archive
+    export_wiki(store, target, LocalAnalysis.name)
+    (target / "queue.json").unlink()
+    result = cli.run(cli.parser().parse_args(["--home", str(target.parent), "status"]))
+    assert result["wiki"]["pending"] == 2
+    assert result["wiki"]["last_compile"] is None
+    assert not (target / "queue.json").exists()
