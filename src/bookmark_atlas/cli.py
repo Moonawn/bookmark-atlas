@@ -16,6 +16,7 @@ from .export import export_json, export_markdown
 from .models import AtlasError, RateLimitError
 from .oauth import login
 from .preferences import load, next_daily, setup, validate
+from .replay import replay
 from .store import Store
 from .sync import process_lock, sync
 from .watch import read_rules, run_watches, save_rule
@@ -103,6 +104,10 @@ def parser():
     wiki.add_argument("action", choices=["apply"])
     wiki.add_argument("input", type=Path)
     commands.add_parser("status", help="查看本地归档与同步状态")
+    cmd = commands.add_parser("replay", help="用当前解析器重新解析已存的原始响应")
+    cmd.add_argument("--since", help="只重放该时间之后捕获的响应（ISO 时间）")
+    cmd.add_argument("--until", help="只重放该时间之前捕获的响应（ISO 时间）")
+    cmd.add_argument("--apply", action="store_true", help="把差异合并回库；默认只报告，不写入")
     cmd = commands.add_parser("search", help="搜索本地原文、作者和链接（支持中文子串）")
     cmd.add_argument("query")
     cmd.add_argument("--limit", type=positive, default=20)
@@ -289,6 +294,8 @@ def run(args):
                 if wiki_home.is_dir():
                     result["wiki"] = wiki_status(store, wiki_home)
                 return result
+            if args.command == "replay":
+                return replay(store, since=args.since, until=args.until, apply=args.apply)
             if args.command == "search":
                 return [r["document"] for r in store.items(args.query, args.limit)]
             if args.command == "wiki":
