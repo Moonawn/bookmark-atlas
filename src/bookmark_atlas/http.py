@@ -14,7 +14,9 @@ from .models import AuthError, ParseError, RateLimitError, UnavailableError
 def network_client(**kwargs) -> httpx.Client:
     # Honor an existing macOS system proxy as well as standard environment settings.
     proxy = os.getenv("ATLAS_PROXY") or getproxies().get("https")
-    return httpx.Client(timeout=30, follow_redirects=False, proxy=proxy, **kwargs)
+    # GraphQL callers check redirects themselves; media fetches follow them.
+    kwargs.setdefault("follow_redirects", False)
+    return httpx.Client(timeout=30, proxy=proxy, **kwargs)
 
 
 def retry_time(headers: httpx.Headers, timestamp: float) -> float:

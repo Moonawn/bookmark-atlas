@@ -9,12 +9,8 @@ from pathlib import Path
 
 from .config import atomic_write, private_dir
 from .export import export_markdown, safe_text
-from .models import AtlasError, digest, now
+from .models import AtlasError, now, source_key
 from .taxonomy import classify, load_taxonomy
-
-
-def source_key(item):
-    return digest([item["site"], item["item_id"]])[:24]
 
 
 def manifest_for(target):

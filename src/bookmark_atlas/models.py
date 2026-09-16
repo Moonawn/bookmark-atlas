@@ -17,6 +17,16 @@ def digest(value: Any) -> str:
     ).hexdigest()
 
 
+def source_key(item: dict) -> str:
+    """Stable filename-safe identifier for an archived item.
+
+    Derived from site and item id, so the same post always maps to the same
+    key regardless of parser version — which is what lets a media file on
+    disk, a wiki source page and a manifest entry name the same post.
+    """
+    return digest([item["site"], item["item_id"]])[:24]
+
+
 @dataclass(frozen=True)
 class Identity:
     site: str

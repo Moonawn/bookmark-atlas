@@ -13,6 +13,7 @@ from .adapters.x_web import XWeb
 from .analysis import LocalAnalysis, OllamaAnalysis, analyze_pending
 from .config import home_path
 from .export import export_json, export_markdown
+from .media import fetch_media
 from .models import AtlasError, RateLimitError
 from .oauth import login
 from .preferences import load, next_daily, setup, validate
@@ -104,6 +105,9 @@ def parser():
     wiki.add_argument("action", choices=["apply"])
     wiki.add_argument("input", type=Path)
     commands.add_parser("status", help="查看本地归档与同步状态")
+    cmd = commands.add_parser("fetch-media", help="下载收藏引用的图片视频（独立于同步）")
+    cmd.add_argument("--limit", type=positive, help="本次最多处理多少条收藏")
+    cmd.add_argument("--dry-run", action="store_true", help="只列出待下载项，不写盘")
     cmd = commands.add_parser("replay", help="用当前解析器重新解析已存的原始响应")
     cmd.add_argument("--since", help="只重放该时间之后捕获的响应（ISO 时间）")
     cmd.add_argument("--until", help="只重放该时间之前捕获的响应（ISO 时间）")
@@ -294,6 +298,8 @@ def run(args):
                 if wiki_home.is_dir():
                     result["wiki"] = wiki_status(store, wiki_home)
                 return result
+            if args.command == "fetch-media":
+                return fetch_media(store, home, limit=args.limit, dry_run=args.dry_run)
             if args.command == "replay":
                 return replay(store, since=args.since, until=args.until, apply=args.apply)
             if args.command == "search":
