@@ -53,10 +53,42 @@ uv run bookmark-atlas status
 
 Rule processing produces excerpts, not generated summaries or fact checks. Ollama runs on loopback and models are not downloaded automatically. Agent Wiki compilation is described in [Wiki workflow](wiki.md). Current built-in classifications, report headings and Ollama prompts are Chinese.
 
+## Local media and replaying stored responses
+
+Collection saves media metadata only. To keep the images themselves — so a deleted post still shows its pictures — run the downloader on its own:
+
+```sh
+# Default: download images, keep a single frame for videos
+uv run bookmark-atlas fetch-media
+
+# See what would be fetched, writing nothing
+uv run bookmark-atlas fetch-media --dry-run
+
+# Bring video binaries down too (one video can outweigh every photo)
+uv run bookmark-atlas fetch-media --with-videos
+
+# Work in batches
+uv run bookmark-atlas fetch-media --limit 50
+```
+
+Limits default to 5 MB for images and 100 MB for videos, and videos are framed rather than downloaded unless asked for. Size is uneven between the two: a measured 62-minute video came to 501 MB against a 0.19 MB average for photos. A file over its limit keeps a thumbnail and records why it was skipped along with its full URL, so nothing is silently dropped.
+
+Media fetching runs separately from sync, so a long download never stalls collection. Every file is named after the post it came from, and `media/index.json` records its original URL, owning post and fetch time.
+
+Archived captures hold the **raw responses** exactly as returned. After the parser improves, `replay` re-reads them without touching the network — which matters once a post has been deleted:
+
+```sh
+uv run bookmark-atlas replay            # report differences only
+uv run bookmark-atlas replay --apply    # merge them back
+uv run bookmark-atlas replay --since 2026-09-01
+```
+
+Replay writes only the `items` table. Memberships, origins, checkpoints and the captures themselves are left alone, so it is safe to repeat, and a response the current parser cannot read is counted rather than aborting the run.
+
 ## Incremental behavior
 
 Each sync checks the newest bookmarks before resuming unfinished history. A newly bookmarked old post counts as new. Two entirely known pages form the normal overlap boundary. `--full` disables that early stop; `--max-pages` bounds a run. The default limit is 50 pages.
 
-`partial` means the page budget was reached; run again to continue. `complete` means the current endpoint ended, not that deleted or inaccessible posts were recovered. `incremental` means the known overlap boundary was reached. Missing posts remain in the archive. Media metadata is saved, while media binaries, whole threads and linked-page bodies are outside the current scope.
+`partial` means the page budget was reached; run again to continue. `complete` means the current endpoint ended, not that deleted or inaccessible posts were recovered. `incremental` means the known overlap boundary was reached. Missing posts remain in the archive. Media metadata is saved during collection, images can be downloaded with `fetch-media`, and videos keep a frame plus their original address. Whole threads and linked-page bodies remain outside the current scope.
 
 [定向作者与关注列表采集 / Directed authors and following lists](watch.md)

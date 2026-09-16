@@ -25,6 +25,12 @@ Read `watch list` before adding rules. Resolve the desired author names or follo
 
 Report author rotation and partial coverage honestly: a capped run is not a complete following-list archive. Large rosters with short time windows can miss posts before authors are visited. Replies, reposts, full threads and linked article bodies are outside the current collection scope.
 
+## Media and stored responses
+
+Collection stores media metadata, not binaries. Run `fetch-media` when the user wants images on disk: it downloads photos, keeps a single frame for videos, and records each file's original URL and owning post. Videos are framed rather than downloaded by default — one long video can outweigh the entire rest of the archive — and `--with-videos` brings the binaries down when that is actually wanted. An oversized file keeps its thumbnail and a recorded skip reason: report it as skipped, never as complete.
+
+Every capture is preserved verbatim. `replay` re-parses those stored responses with the current parser and never fetches anything, which matters when a post has been deleted. It reports differences by default and writes only with `--apply`; it touches the `items` table alone, so memberships, origins, checkpoints and the captures themselves stay as they were.
+
 ## Compile knowledge, not a pile of summaries
 
 Read private `wiki/taxonomy.json` and existing classifications first. Select one or more topic IDs and a note type, reuse existing concepts, and supply `related` IDs when useful. Use `inbox` when a topic is uncertain; do not silently invent category IDs.

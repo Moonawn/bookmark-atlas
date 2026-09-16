@@ -137,14 +137,60 @@ uv run bookmark-atlas sync --mode web --full --max-pages 100
 ~/.local/share/bookmark-atlas/
 ├── atlas.sqlite3        # 收藏、原始响应、来源、进度、分析和运行记录
 ├── credentials.json    # 仅官方 OAuth 登录后出现，权限 0600
+├── media/              # fetch-media 下载的图片与视频截图
+│   └── index.json       # 每个文件的原始 URL、所属推文与下载时间
 ├── reports/
 │   ├── index.md         # 按主题连接相关收藏
 │   ├── recent.md        # 按首次发现时间排列
-│   └── items/           # 每条收藏的原文与分析
+│   └── items/           # 每条收藏的原文、分析与本地媒体
+├── wiki/                # Agent 整理的知识层（队列、来源、笔记）
 └── exports/
 ```
 
 用全局 `--home`（放在子命令前）或 `ATLAS_HOME` 更改目录。不同 X 账号使用独立目录。
+
+## 本地媒体与溯源
+
+`sync` 只保存媒体元数据。要把图片本身也收到本地、让原帖删除后仍能查看，单独运行：
+
+```sh
+# 默认：下载图片，视频只存首帧截图
+uv run bookmark-atlas fetch-media
+
+# 先看会下载什么，不写盘
+uv run bookmark-atlas fetch-media --dry-run
+
+# 连视频一起下载（单个视频可能远大于全部图片之和）
+uv run bookmark-atlas fetch-media --with-videos
+
+# 分批处理
+uv run bookmark-atlas fetch-media --limit 50
+```
+
+默认上限是图片 5 MB、视频 100 MB，**视频默认不下载完整文件，只存首帧截图**。原因是视频体积极不均衡：实测一条 62 分钟的视频 501 MB，而图片平均只有 0.19 MB。
+
+超出上限的文件不会被静默丢弃——仍然保存缩略图，并在索引里记下跳过原因和完整地址，之后可以单独取回。
+
+媒体下载独立于同步，一次长下载不会拖住收藏同步。
+
+每个下载的文件都以它所来源的收藏命名，`media/index.json` 记录原始 URL、所属推文和下载时间，因此任何文件都能追溯回出处。
+
+## 用当前解析器重新解析历史响应
+
+归档保留了每次抓取的**原始响应**。解析器改进后可以拿它们重跑，不必重新联网——这在原帖已被删除时尤其重要。
+
+```sh
+# 只报告差异，不写入
+uv run bookmark-atlas replay
+
+# 把差异合并回库
+uv run bookmark-atlas replay --apply
+
+# 限定时间范围
+uv run bookmark-atlas replay --since 2026-09-01
+```
+
+重放只更新 `items` 表，不碰收藏归属、来源记录、进度游标和原始响应本身，因此可以反复运行。解析器读不懂的旧响应会被计数，而不是中断整次重放。
 
 ## 测试与当前边界
 
@@ -157,7 +203,7 @@ uv run ruff format --check src tests
 uv build
 ```
 
-支持范围和测试覆盖见 [兼容性说明](verification.md)。网页接口会随 X 更新变化；遇到结构变化会报错，避免将错误响应当作空收藏。首版保存媒体元数据，不下载图片/视频二进制，不展开完整线程或外链正文；暂不支持收藏夹结构同步和其他站点。
+支持范围和测试覆盖见 [兼容性说明](verification.md)。网页接口会随 X 更新变化；遇到结构变化会报错，避免将错误响应当作空收藏。媒体元数据随同步保存，图片可由 `fetch-media` 下载到本地，视频默认只保留首帧截图与原始地址。完整线程与外链正文仍不展开；暂不支持收藏夹结构同步和其他站点。
 
 [架构与站点扩展](architecture.md) · [贡献指南](../CONTRIBUTING.md) · [安全与隐私](../SECURITY.md) · [MIT License](../LICENSE)
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- `status` reports Wiki backlog depth and the last compile time, so a stalled compile queue is visible without inspecting files by hand.
+- `replay` re-parses stored captures with the current parser, recovering fields earlier parser versions skipped. Read-only by default; `--apply` merges differences using the same conservative rules as sync, and only the `items` table is touched.
+- `fetch-media` downloads images so a deleted post keeps its pictures. Videos are framed rather than downloaded by default, every file is named after its source key, and `media/index.json` records each file's original URL. Oversized files keep a thumbnail and a recorded skip reason instead of disappearing.
+- Reports and wiki source pages link locally downloaded media rather than only the remote originals.
+- `source_key` moves into `models`, so a media file and a wiki source page name the same post identically.
+
 ## 0.3.0 — 2026-09-07
 
 - Directed collection from selected X authors and following lists, with rolling time windows, keyword/language filters, original/quote selection and bounded author rotation.

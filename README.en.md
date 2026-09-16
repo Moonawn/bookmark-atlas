@@ -122,7 +122,7 @@ Enabled rules run during future `sync` calls and existing schedules. Bookmarks a
 
 SQLite stores the archive, Markdown makes it readable, and JSON makes it portable. Repeated syncs do not duplicate unchanged items. Previously saved bookmarks remain even when missing from a later response. If analysis fails, the original material and sync progress remain available for a separate retry.
 
-Media file downloads, complete threads and linked-page bodies are outside the current scope. X website changes can affect the web adapter. See [compatibility and test coverage](docs/verification.md).
+Images can be downloaded locally with `fetch-media`; videos keep a first frame and their original address, and both record their source. Complete threads and linked-page bodies remain outside the current scope. X website changes can affect the web adapter. See [compatibility and test coverage](docs/verification.md).
 
 ---
 

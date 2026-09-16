@@ -12,6 +12,8 @@ The bookmark-to-Wiki workflow:
 - `store.py`: schema version 2, separate bookmark/watch memberships, origin tracking, raw pages, checkpoints, runs, change events, analyses and failures.
 - `analysis.py`: versioned analysis engines; content hashes invalidate stale results.
 - `export.py`: raw JSON and readable local Markdown artifacts with escaped source text.
+- `media.py`: binary downloads, separate from sync so a long fetch never stalls collection. Files are named after the source key and indexed with their original URL, so every file traces back to its post. Oversized files keep a thumbnail and a recorded skip reason instead of vanishing.
+- `replay.py`: re-parses stored captures with the current parser. Reads only; writes only the `items` table, so memberships, origins, checkpoints and the captures themselves are never touched and replaying stays idempotent.
 - `oauth.py`: PKCE S256, state validation, loopback callback, token exchange and private storage.
 
 ## Incremental semantics
@@ -22,7 +24,7 @@ Every successful response page, its normalized items, source records, membership
 
 Every run starts at the collection head. The default overlap is two **entirely known pages**. Mixed old/new pages do not terminate an incremental pass. After the head scan, a stored historical cursor resumes an incomplete backfill. `--full` ignores overlap and traverses from the beginning within the page budget. API and web cursors are independent.
 
-Absence is never interpreted as deletion. Media metadata and external links are preserved, but the current release does not download media binaries or crawl linked pages/whole threads. Shorter content never overwrites a longer captured post. This conservative merge can retain an older long version if a post is edited into a shorter one; raw response pages preserve the observations for future reconciliation.
+Absence is never interpreted as deletion. Media metadata and external links are preserved; `fetch-media` downloads images on request and keeps a frame plus the original address for videos, while linked pages and whole threads remain outside the collection scope. Shorter content never overwrites a longer captured post. This conservative merge can retain an older long version if a post is edited into a shorter one; raw response pages preserve the observations for future reconciliation.
 
 Auto mode tries the preferred adapter, verifies identity and one bookmark page, and can switch on missing authorization, unusable API credits, or an unavailable endpoint before page commits. It records fallback reasons. After writes begin, it stops and preserves the checkpoint on failure. It never falls back on rate limits, identity mismatch, or unrecognized data structures.
 

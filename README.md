@@ -48,6 +48,9 @@ uv run bookmark-atlas sync
 ```sh
 uv run bookmark-atlas search "智能体"
 uv run bookmark-atlas export markdown
+
+# 把图片收到本地；视频默认只存首帧截图和原始地址
+uv run bookmark-atlas fetch-media
 ```
 
 资料默认保存在 `~/.local/share/bookmark-atlas/`，打开 `reports/index.md` 即可阅读。使用 `--home` 或 `ATLAS_HOME` 自定义目录。
@@ -122,7 +125,7 @@ uv run bookmark-atlas watch sync research
 
 SQLite 保存归档，Markdown 方便阅读，JSON 方便迁移。重复同步不重复添加；未出现在新一轮列表中的旧收藏仍会保留。模型整理失败时，原文和采集进度仍在，可以单独重试。
 
-图片视频文件下载、完整讨论串与外链正文暂不采集。网页接口随 X 更新可能变化；更多环境与测试范围见 [兼容性说明](docs/verification.md)。
+图片可由 `fetch-media` 下载到本地，视频默认只保留首帧截图和原始地址，两者都记下来源。完整讨论串与外链正文暂不采集。网页接口随 X 更新可能变化；更多环境与测试范围见 [兼容性说明](docs/verification.md)。
 
 ---
 
