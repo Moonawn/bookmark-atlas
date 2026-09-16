@@ -29,8 +29,56 @@ def export_json(store, target: Path):
     return {"items": len(documents), "path": str(target)}
 
 
-def export_markdown(store, target: Path, engine: str):
+def local_media(home: Path) -> dict:
+    """Media already downloaded, keyed by source key.
+
+    Absent or unreadable means "no local media": an export must still succeed
+    when nothing has been fetched, and a damaged index is not its problem.
+    """
+    path = home / "media" / "index.json"
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+        return value if isinstance(value, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def media_lines(entry: dict, base: str = "../../media") -> list[str]:
+    """Markdown for one item's media, pointing at the local copies.
+
+    A video that was only framed keeps its original URL visible, so the
+    reader knows the full file exists and where it lives.
+    """
+    lines = []
+    for record in entry.get("files", []):
+        if name := record.get("file"):
+            lines += [f"![{record.get('kind', 'media')}]({base}/{name})", ""]
+        elif name := record.get("thumbnail"):
+            lines += [
+                f"![视频截图]({base}/{name})",
+                "",
+                f"> 完整视频未下载：{record.get('original', '')}",
+                "",
+            ]
+    return lines
+
+
+def export_markdown(
+    store,
+    target: Path,
+    engine: str,
+    media: dict | None = None,
+    media_base: str = "../../media",
+):
+    """Render items to Markdown.
+
+    `media_base` is the path from `target/items/` back to the media directory;
+    it differs between the report tree and the wiki source tree, so the caller
+    says which depth it is writing at.
+    """
     private_dir(target)
+    if media is None:
+        media = local_media(target.parent)
     topics = defaultdict(list)
     recent = []
     rows = store.items()
@@ -73,6 +121,11 @@ def export_markdown(store, target: Path, engine: str):
             ]
             lines += ["- " + safe_text(point) for point in result.get("key_points", [])]
             lines += ["", "后续行动：" + safe_text(result.get("action", "")), ""]
+        entry = media.get(digest([item["site"], item["item_id"]])[:24])
+        if entry and (found := media_lines(entry, media_base)):
+            # Point at the local copies rather than the remote originals, so a
+            # deleted post still reads with its images.
+            lines += ["## 本地媒体", "", *found]
         lines += ["## 关联链接", ""] + ["- " + safe_text(link) for link in item["links"]]
         atomic_write(target / "items" / filename, "\n".join(lines))
     index = [

@@ -7,7 +7,7 @@ from test_core import Fake, execute, item, page
 from bookmark_atlas import cli
 from bookmark_atlas.analysis import LocalAnalysis, analyze_pending
 from bookmark_atlas.config import atomic_write
-from bookmark_atlas.models import AtlasError
+from bookmark_atlas.models import AtlasError, source_key
 from bookmark_atlas.preferences import load, next_daily, setup, validate
 from bookmark_atlas.store import Store
 from bookmark_atlas.wiki import apply_notes, export_wiki, wiki_status
@@ -186,6 +186,22 @@ def test_changed_source_must_update_all_related_notes(archive):
     refs.update({r["key"]: r for r in fresh})
     with pytest.raises(AtlasError, match="全部知识笔记"):
         apply_notes(store, target, payload(list(refs.values())))
+
+
+def test_wiki_source_pages_reach_media_from_one_level_deeper(archive):
+    """Wiki sources sit under wiki/sources/items, so media is three levels up."""
+    store, target = archive
+    key = source_key(next(iter(store.items()))["document"])
+    media = target.parent / "media"
+    media.mkdir()
+    (media / f"{key}-1.jpg").write_bytes(b"photo")
+    (media / "index.json").write_text(
+        json.dumps({key: {"files": [{"n": 1, "kind": "photo", "file": f"{key}-1.jpg"}]}})
+    )
+
+    export_wiki(store, target, LocalAnalysis.name)
+    page = (target / "sources/items" / f"{key}.md").read_text()
+    assert f"![photo](../../../media/{key}-1.jpg)" in page
 
 
 def test_wiki_status_never_drifts_from_export_queue(archive):

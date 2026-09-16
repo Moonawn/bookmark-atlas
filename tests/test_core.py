@@ -13,6 +13,7 @@ from bookmark_atlas.models import (
     Page,
     ParseError,
     RateLimitError,
+    source_key,
 )
 from bookmark_atlas.store import Store
 from bookmark_atlas.sync import process_lock, sync, sync_one
@@ -232,6 +233,57 @@ def test_export_unicode_and_untrusted_content(store, tmp_path):
         json.loads((tmp_path / "export.json").read_text())["items"][0]["document"]["item_id"]
         == "../escape"
     )
+
+
+def test_export_points_at_local_media_once_it_is_fetched(store, tmp_path):
+    """A downloaded file replaces the remote URL in the report it belongs to."""
+    execute(store, Fake({None: page(item("a"))}))
+    analyze_pending(store, LocalAnalysis())
+    export_markdown(store, tmp_path / "report", LocalAnalysis.name)
+    report = next((tmp_path / "report/items").glob("*.md"))
+    assert "## 本地媒体" not in report.read_text()  # nothing fetched yet
+
+    key = source_key(next(iter(store.items()))["document"])
+    media = tmp_path / "media"
+    media.mkdir()
+    (media / f"{key}-1.jpg").write_bytes(b"photo")
+    (media / f"{key}-2-thumb.jpg").write_bytes(b"frame")
+    (media / "index.json").write_text(
+        json.dumps(
+            {
+                key: {
+                    "files": [
+                        {"n": 1, "kind": "photo", "file": f"{key}-1.jpg"},
+                        {
+                            "n": 2,
+                            "kind": "video",
+                            "skipped": "video_not_downloaded",
+                            "original": "https://video.twimg.com/x.mp4",
+                            "thumbnail": f"{key}-2-thumb.jpg",
+                        },
+                    ]
+                }
+            }
+        )
+    )
+
+    export_markdown(store, tmp_path / "report", LocalAnalysis.name)
+    content = next((tmp_path / "report/items").glob("*.md")).read_text()
+    assert f"![photo](../../media/{key}-1.jpg)" in content
+    assert f"![视频截图](../../media/{key}-2-thumb.jpg)" in content
+    # The full video stays discoverable even though only a frame was kept.
+    assert "完整视频未下载" in content and "https://video.twimg.com/x.mp4" in content
+
+
+def test_export_survives_a_damaged_media_index(store, tmp_path):
+    """A broken index must not take the reports down with it."""
+    execute(store, Fake({None: page(item("a"))}))
+    analyze_pending(store, LocalAnalysis())
+    media = tmp_path / "media"
+    media.mkdir()
+    (media / "index.json").write_text("{ not json")
+    export_markdown(store, tmp_path / "report", LocalAnalysis.name)
+    assert next((tmp_path / "report/items").glob("*.md")).is_file()
 
 
 def test_analysis_failure_does_not_lose_items_and_can_retry(store):

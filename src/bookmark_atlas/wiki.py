@@ -8,7 +8,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from .config import atomic_write, private_dir
-from .export import export_markdown, safe_text
+from .export import export_markdown, local_media, safe_text
 from .models import AtlasError, now, source_key
 from .taxonomy import classify, load_taxonomy
 
@@ -69,7 +69,15 @@ def wiki_status(store, target: Path):
 def export_wiki(store, target: Path, engine: str):
     private_dir(target)
     taxonomy = load_taxonomy(target)
-    export_markdown(store, target / "sources", engine)
+    # Wiki source pages sit one level deeper than report pages, and the media
+    # directory lives beside the archive rather than inside the wiki tree.
+    export_markdown(
+        store,
+        target / "sources",
+        engine,
+        media=local_media(target.parent),
+        media_base="../../../media",
+    )
     private_dir(target / "notes")
     private_dir(target / "personal")
     manifest = manifest_for(target)
