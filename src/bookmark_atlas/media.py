@@ -128,8 +128,21 @@ def keep_thumbnail(client, item: dict, name: str, target: Path) -> str | None:
     return final.name
 
 
-def fetch_media(store: Store, home: Path, *, limit: int | None = None, dry_run=False) -> dict:
-    """Download media for archived items that do not have it yet."""
+def fetch_media(
+    store: Store,
+    home: Path,
+    *,
+    limit: int | None = None,
+    dry_run: bool = False,
+    fetch_videos: bool = False,
+) -> dict:
+    """Download media for archived items that do not have it yet.
+
+    Videos are not downloaded unless `fetch_videos` is set: a single frame
+    tells you what the video was, at a fraction of the size, and one long
+    video can outweigh everything else in the archive. The full URL is still
+    recorded either way, so the choice can be revisited.
+    """
     target = home / "media"
     if not dry_run:
         private_dir(target)
@@ -142,7 +155,7 @@ def fetch_media(store: Store, home: Path, *, limit: int | None = None, dry_run=F
     if limit:
         rows = rows[:limit]
 
-    downloaded = oversized = failed = 0
+    downloaded = oversized = frames = failed = 0
     bytes_total = 0
     touched: list[dict] = []
 
@@ -153,8 +166,29 @@ def fetch_media(store: Store, home: Path, *, limit: int | None = None, dry_run=F
             files: list[dict] = []
             for number, item in enumerate(targets(document), start=1):
                 name = f"{key}-{number}"
+                is_video = item["kind"] == "video"
+                skip_video = is_video and not fetch_videos
                 if dry_run:
-                    files.append({"n": number, "kind": item["kind"], "url": item["url"]})
+                    files.append(
+                        {
+                            "n": number,
+                            "kind": item["kind"],
+                            "plan": "thumbnail" if skip_video else "download",
+                            "url": item["url"],
+                        }
+                    )
+                    continue
+                if skip_video:
+                    frames += 1
+                    record: dict[str, Any] = {
+                        "n": number,
+                        "kind": "video",
+                        "skipped": "video_not_downloaded",
+                        "original": item["url"],
+                    }
+                    if thumb := keep_thumbnail(client, item, name, target):
+                        record["thumbnail"] = thumb
+                    files.append(record)
                     continue
                 part = target / f"{name}.part"
                 try:
@@ -219,6 +253,7 @@ def fetch_media(store: Store, home: Path, *, limit: int | None = None, dry_run=F
     return {
         "items": len(rows),
         "downloaded": downloaded,
+        "video_frames": frames,
         "oversized": oversized,
         "failed": failed,
         "bytes": bytes_total,

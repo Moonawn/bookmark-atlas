@@ -93,7 +93,7 @@ def test_oversized_video_keeps_a_thumbnail_and_records_the_skip(archive, tmp_pat
     install(monkeypatch, handler)
     add_item(archive, [video()])
 
-    report = fetch_media(archive, tmp_path)
+    report = fetch_media(archive, tmp_path, fetch_videos=True)
     assert report["oversized"] == 1
     assert report["downloaded"] == 0
 
@@ -114,6 +114,30 @@ def test_failed_items_are_not_recorded_so_they_retry(archive, tmp_path, monkeypa
     assert report["failed"] == 1
     index = tmp_path / "media/index.json"
     assert json.loads(index.read_text()) == {}  # nothing recorded, so the next run retries
+
+
+def test_videos_are_framed_not_downloaded_by_default(archive, tmp_path, monkeypatch):
+    """A video costs little to identify: keep a frame, record where it lives."""
+    seen = []
+
+    def handler(request):
+        seen.append(str(request.url))
+        return httpx.Response(200, content=b"frame", headers={"content-type": "image/jpeg"})
+
+    install(monkeypatch, handler)
+    add_item(archive, [video(), photo()])
+
+    report = fetch_media(archive, tmp_path)
+    assert report["video_frames"] == 1
+    assert report["downloaded"] == 1  # the photo still comes down whole
+    assert not any("/v/1.mp4" in url for url in seen)  # video bytes never requested
+
+    index = json.loads((tmp_path / "media/index.json").read_text())
+    files = index[next(iter(index))]["files"]
+    assert files[0]["skipped"] == "video_not_downloaded"
+    assert files[0]["original"] == "https://video.twimg.com/v/1.mp4"
+    assert files[0]["thumbnail"].endswith("-thumb.jpg")
+    assert files[1]["file"].endswith(".jpg")
 
 
 def test_records_provenance_for_every_download(archive, tmp_path, monkeypatch):

@@ -105,9 +105,10 @@ def parser():
     wiki.add_argument("action", choices=["apply"])
     wiki.add_argument("input", type=Path)
     commands.add_parser("status", help="查看本地归档与同步状态")
-    cmd = commands.add_parser("fetch-media", help="下载收藏引用的图片视频（独立于同步）")
+    cmd = commands.add_parser("fetch-media", help="下载收藏引用的媒体（独立于同步）")
     cmd.add_argument("--limit", type=positive, help="本次最多处理多少条收藏")
     cmd.add_argument("--dry-run", action="store_true", help="只列出待下载项，不写盘")
+    cmd.add_argument("--with-videos", action="store_true", help="连视频一起下载；默认只存首帧截图")
     cmd = commands.add_parser("replay", help="用当前解析器重新解析已存的原始响应")
     cmd.add_argument("--since", help="只重放该时间之后捕获的响应（ISO 时间）")
     cmd.add_argument("--until", help="只重放该时间之前捕获的响应（ISO 时间）")
@@ -299,7 +300,13 @@ def run(args):
                     result["wiki"] = wiki_status(store, wiki_home)
                 return result
             if args.command == "fetch-media":
-                return fetch_media(store, home, limit=args.limit, dry_run=args.dry_run)
+                return fetch_media(
+                    store,
+                    home,
+                    limit=args.limit,
+                    dry_run=args.dry_run,
+                    fetch_videos=args.with_videos,
+                )
             if args.command == "replay":
                 return replay(store, since=args.since, until=args.until, apply=args.apply)
             if args.command == "search":
