@@ -69,12 +69,14 @@ def media_lines(entry: dict, base: str = "../../media") -> list[str]:
     for record in entry.get("files", []):
         # Images from a quoted post are labelled, so a reader never takes
         # someone else's picture for the bookmarker's own.
-        source = "引用" if record.get("quoted") else ""
+        label = "视频截图" if record.get("kind") == "video" else "配图"
+        if record.get("quoted"):
+            label = "引用" + label
         if name := record.get("file"):
-            lines += [f"![{source}{record.get('kind', 'media')}]({base}/{name})", ""]
+            lines += [f"![{label}]({base}/{name})", ""]
         elif name := record.get("thumbnail"):
             lines += [
-                f"![{source}视频截图]({base}/{name})",
+                f"![{label}]({base}/{name})",
                 "",
                 f"> 完整视频未下载：{record.get('original', '')}",
                 "",

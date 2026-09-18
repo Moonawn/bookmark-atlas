@@ -269,7 +269,7 @@ def test_export_points_at_local_media_once_it_is_fetched(store, tmp_path):
 
     export_markdown(store, tmp_path / "report", LocalAnalysis.name)
     content = next((tmp_path / "report/items").glob("*.md")).read_text()
-    assert f"![photo](../../media/{key}-1.jpg)" in content
+    assert f"![配图](../../media/{key}-1.jpg)" in content
     assert f"![视频截图](../../media/{key}-2-thumb.jpg)" in content
     # The full video stays discoverable even though only a frame was kept.
     assert "完整视频未下载" in content and "https://video.twimg.com/x.mp4" in content

@@ -201,7 +201,7 @@ def test_wiki_source_pages_reach_media_from_one_level_deeper(archive):
 
     export_wiki(store, target, LocalAnalysis.name)
     page = (target / "sources/items" / f"{key}.md").read_text()
-    assert f"![photo](../../../media/{key}-1.jpg)" in page
+    assert f"![配图](../../../media/{key}-1.jpg)" in page
 
 
 def test_wiki_status_never_drifts_from_export_queue(archive):
