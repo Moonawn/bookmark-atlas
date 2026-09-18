@@ -61,6 +61,46 @@ def walk(value):
             yield from walk(child)
 
 
+def article_body(value: dict) -> tuple[str, str, list[dict]]:
+    """Title, body and images of a long-form X Article attached to a tweet.
+
+    An article-carrying post has only a t.co link in full_text, so the article
+    is the whole content. The GraphQL request already asks for it
+    (withArticlePlainText); this reads what that returns.
+    """
+    result = (value.get("article") or {}).get("article_results", {}).get("result") or {}
+    body = (result.get("plain_text") or "").strip()
+    if not body:
+        return "", "", []
+    media = [
+        {"type": "photo", "media_url_https": url}
+        for entity in result.get("media_entities", [])
+        if (url := (entity.get("media_info") or {}).get("original_img_url"))
+    ]
+    return (result.get("title") or "").strip(), body, media
+
+
+def quoted_post(value: dict) -> tuple[str, str]:
+    """Author and text of the post this one quotes.
+
+    A quote-tweet's own words are often a one-line endorsement; the substance
+    is in the post being quoted, which the timeline returns but we never read.
+    """
+    result = (value.get("quoted_status_result") or {}).get("result") or {}
+    while result.get("__typename") == "TweetWithVisibilityResults":
+        result = result.get("tweet", {})
+    note = (result.get("note_tweet") or {}).get("note_tweet_results", {}).get("result") or {}
+    text = note.get("text") or (result.get("legacy") or {}).get("full_text") or ""
+    title, body, _ = article_body(result)
+    if body:
+        text = "\n\n".join(part for part in (title, body) if part)
+    user = (result.get("core") or {}).get("user_results", {}).get("result") or {}
+    author = user.get("core", {}).get("screen_name") or user.get("legacy", {}).get(
+        "screen_name", ""
+    )
+    return (author, html.unescape(text).strip()) if text.strip() else ("", "")
+
+
 def parse_tweet(value: dict) -> Item | None:
     while value.get("__typename") == "TweetWithVisibilityResults":
         value = value.get("tweet", {})
@@ -79,10 +119,21 @@ def parse_tweet(value: dict) -> Item | None:
     stamp = legacy.get("created_at", "")
     with contextlib.suppress(ValueError):
         stamp = datetime.strptime(stamp, "%a %b %d %H:%M:%S %z %Y").astimezone(UTC).isoformat()
+    title, body, article_media = article_body(value)
+    text = html.unescape(note.get("text") or legacy["full_text"])
+    if body:
+        # A link-only post carries nothing of its own; keep any real words it has.
+        own = re.sub(r"https://t\.co/\w+", "", text).strip()
+        text = "\n\n".join(part for part in (own, title, body) if part)
+    quoted_author, quoted_text = quoted_post(value)
+    if quoted_text:
+        # Marked, so the archive never presents someone else's words as the
+        # bookmark's own.
+        text = f"{text}\n\n【引用 @{quoted_author}】\n{quoted_text}"
     return Item(
         "x",
         str(item_id),
-        html.unescape(note.get("text") or legacy["full_text"]),
+        text,
         f"https://x.com/i/status/{item_id}",
         kind="repost"
         if legacy.get("retweeted_status_result")
@@ -100,7 +151,7 @@ def parse_tweet(value: dict) -> Item | None:
             for u in entities.get("urls", [])
             if u.get("expanded_url") or u.get("url")
         ],
-        media=legacy.get("extended_entities", {}).get("media", []),
+        media=legacy.get("extended_entities", {}).get("media", []) + article_media,
     )
 
 

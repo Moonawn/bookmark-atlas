@@ -111,16 +111,62 @@ def test_web_nested_visibility_long_post_and_quote_not_membership():
             },
             "note_tweet": {"note_tweet_results": {"result": {"text": "完整长文"}}},
             "quoted_status_result": {
-                "result": {"rest_id": "12", "legacy": {"full_text": "quoted"}}
+                "result": {
+                    "rest_id": "12",
+                    "legacy": {"full_text": "quoted"},
+                    "core": {
+                        "user_results": {
+                            "result": {"rest_id": "3", "core": {"screen_name": "quoted_writer"}}
+                        }
+                    },
+                }
             },
         },
     }
     page = parse_web(web_body(result))
     assert len(page.items) == 1
-    assert page.items[0].text == "完整长文"
+    # The quoted post is archived with the bookmark that quotes it, marked so
+    # its words are never mistaken for the bookmarker's own.
+    assert page.items[0].text == "完整长文\n\n【引用 @quoted_writer】\nquoted"
     assert page.items[0].author == "writer"
     assert page.items[0].published_at == "2026-09-07T01:00:00+00:00"
     assert page.next_cursor == "older"
+
+
+def test_web_article_body_and_images_replace_a_bare_link():
+    """An article post carries only a t.co link; the article is the content.
+
+    Without this the archive keeps "https://t.co/xxxx" as the whole post —
+    which is what it did for 53 bookmarks before the parser read the field.
+    """
+    result = {
+        "rest_id": "21",
+        "legacy": {
+            "full_text": "https://t.co/abc123",
+            "created_at": "Mon Sep 07 01:00:00 +0000 2026",
+        },
+        "core": {"user_results": {"result": {"rest_id": "2", "core": {"screen_name": "writer"}}}},
+        "article": {
+            "article_results": {
+                "result": {
+                    "title": "标题",
+                    "plain_text": "正文第一段\n\n正文第二段",
+                    "media_entities": [
+                        {"media_info": {"original_img_url": "https://pbs.twimg.com/media/one.jpg"}},
+                        {"media_info": {}},  # no image URL: must not become a media entry
+                    ],
+                }
+            }
+        },
+    }
+    page = parse_web(web_body(result))
+    assert len(page.items) == 1
+    item = page.items[0]
+    assert item.text == "标题\n\n正文第一段\n\n正文第二段"
+    assert "t.co" not in item.text
+    assert item.media == [
+        {"type": "photo", "media_url_https": "https://pbs.twimg.com/media/one.jpg"}
+    ]
 
 
 def test_web_tombstone_preserved_in_raw_not_a_fake_item():
