@@ -158,3 +158,54 @@ def test_records_provenance_for_every_download(archive, tmp_path, monkeypatch):
     assert record["source_url"].endswith("BBB.png?name=orig")
     assert (tmp_path / "media" / record["file"]).is_file()
     assert record["file"].startswith(key)  # filename carries the source key
+
+
+def test_targets_marks_media_belonging_to_a_quoted_post():
+    own = photo("https://pbs.twimg.com/media/mine.jpg")
+    theirs = {**photo("https://pbs.twimg.com/media/theirs.jpg"), "quoted": True}
+    found = targets(document([own, theirs]))
+    assert [t["quoted"] for t in found] == [False, True]
+
+
+def test_media_added_later_is_fetched_even_though_the_item_is_indexed(
+    archive, tmp_path, monkeypatch
+):
+    """A parser improvement that finds more media must not be skipped as done."""
+    install(
+        monkeypatch,
+        lambda request: httpx.Response(200, content=b"data", headers={"content-type": "image/png"}),
+    )
+    add_item(archive, [photo("https://pbs.twimg.com/media/one.png")])
+    fetch_media(archive, tmp_path)
+    assert len(next(iter(load_index(tmp_path).values()))["files"]) == 1
+
+    # The same post re-archived with an added quoted image, as a replay does.
+    archive.db.execute(
+        "INSERT INTO items VALUES(?,?,?,?,?,?) ON CONFLICT(site,item_id) DO UPDATE SET document=excluded.document",
+        (
+            "x",
+            "1",
+            json.dumps(
+                document(
+                    [
+                        photo("https://pbs.twimg.com/media/one.png"),
+                        {**photo("https://pbs.twimg.com/media/two.png"), "quoted": True},
+                    ]
+                )
+            ),
+            "h",
+            "t",
+            "t",
+        ),
+    )
+    archive.db.commit()
+
+    # Reprocessing re-fetches the item's whole media list, overwriting the
+    # files already on disk under the same deterministic names.
+    result = fetch_media(archive, tmp_path)
+    assert result["items"] == 1 and result["downloaded"] == 2
+    assert [f["quoted"] for f in next(iter(load_index(tmp_path).values()))["files"]] == [False, True]
+
+
+def load_index(tmp_path):
+    return json.loads((tmp_path / "media/index.json").read_text())

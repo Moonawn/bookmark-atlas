@@ -52,12 +52,25 @@ def best_video(media: dict) -> str | None:
 
 
 def targets(document: dict, video_limit: int = VIDEO_LIMIT) -> list[dict[str, Any]]:
-    """What this item's media should become on disk, in order."""
+    """What this item's media should become on disk, in order.
+
+    Media belonging to a quoted post carries that through as `quoted`, so a
+    downloaded file can still be told apart from the bookmarker's own.
+    """
     found = []
     for media in document.get("media", []):
         thumb = media.get("media_url_https")
+        quoted = bool(media.get("quoted"))
         if video := best_video(media):
-            found.append({"kind": "video", "url": video, "thumbnail": thumb, "limit": video_limit})
+            found.append(
+                {
+                    "kind": "video",
+                    "url": video,
+                    "thumbnail": thumb,
+                    "limit": video_limit,
+                    "quoted": quoted,
+                }
+            )
         elif thumb:
             found.append(
                 {
@@ -65,6 +78,7 @@ def targets(document: dict, video_limit: int = VIDEO_LIMIT) -> list[dict[str, An
                     "url": f"{thumb}?name=orig",
                     "thumbnail": f"{thumb}?name=small",
                     "limit": PHOTO_LIMIT,
+                    "quoted": quoted,
                 }
             )
     return found
@@ -154,6 +168,7 @@ def fetch_media(
         private_dir(target)
     index = load_index(target)
     wanted = set(items) if items else None
+    video_limit = video_limit_mb * 1024 * 1024 if video_limit_mb else VIDEO_LIMIT
     rows = []
     for row in store.items():
         document = row["document"]
@@ -163,11 +178,15 @@ def fetch_media(
         if wanted is not None:
             if key in wanted:
                 rows.append(row)
-        elif key not in index:
+            continue
+        # An item is done only when the index covers everything it now holds;
+        # a parser improvement that finds more media must not be skipped as
+        # already fetched.
+        covered = len(index.get(key, {}).get("files", []))
+        if key not in index or covered < len(targets(document, video_limit)):
             rows.append(row)
     if limit:
         rows = rows[:limit]
-    video_limit = video_limit_mb * 1024 * 1024 if video_limit_mb else VIDEO_LIMIT
 
     downloaded = oversized = frames = failed = 0
     bytes_total = 0
@@ -182,11 +201,15 @@ def fetch_media(
                 name = f"{key}-{number}"
                 is_video = item["kind"] == "video"
                 skip_video = is_video and not fetch_videos
+                base: dict[str, Any] = {
+                    "n": number,
+                    "kind": item["kind"],
+                    "quoted": item["quoted"],
+                }
                 if dry_run:
                     files.append(
                         {
-                            "n": number,
-                            "kind": item["kind"],
+                            **base,
                             "plan": "thumbnail" if skip_video else "download",
                             "url": item["url"],
                         }
@@ -194,9 +217,8 @@ def fetch_media(
                     continue
                 if skip_video:
                     frames += 1
-                    record: dict[str, Any] = {
-                        "n": number,
-                        "kind": "video",
+                    record = {
+                        **base,
                         "skipped": "video_not_downloaded",
                         "original": item["url"],
                     }
@@ -209,16 +231,15 @@ def fetch_media(
                     written, content_type = download(client, item["url"], part, item["limit"])
                 except (AtlasError, OSError) as exc:
                     failed += 1
-                    files.append({"n": number, "kind": item["kind"], "error": str(exc)})
+                    files.append({**base, "error": str(exc)})
                     continue
 
                 if written > item["limit"]:
                     # Too large to keep whole. Keep a frame instead so the post
                     # still shows what the file was, and record the full URL.
                     oversized += 1
-                    record: dict[str, Any] = {
-                        "n": number,
-                        "kind": item["kind"],
+                    record = {
+                        **base,
                         "skipped": "over_limit",
                         "bytes": written,
                         "original": item["url"],
@@ -232,8 +253,7 @@ def fetch_media(
                 part.replace(target / f"{name}{suffix}")
                 files.append(
                     {
-                        "n": number,
-                        "kind": item["kind"],
+                        **base,
                         "file": f"{name}{suffix}",
                         "source_url": item["url"],
                         "bytes": written,

@@ -113,7 +113,18 @@ def test_web_nested_visibility_long_post_and_quote_not_membership():
             "quoted_status_result": {
                 "result": {
                     "rest_id": "12",
-                    "legacy": {"full_text": "quoted"},
+                    "legacy": {
+                        "full_text": "quoted",
+                        "extended_entities": {
+                            "media": [
+                                {
+                                    "media_key": "3_999",
+                                    "type": "photo",
+                                    "media_url_https": "https://pbs.twimg.com/media/q.jpg",
+                                }
+                            ]
+                        },
+                    },
                     "core": {
                         "user_results": {
                             "result": {"rest_id": "3", "core": {"screen_name": "quoted_writer"}}
@@ -126,9 +137,13 @@ def test_web_nested_visibility_long_post_and_quote_not_membership():
     page = parse_web(web_body(result))
     assert len(page.items) == 1
     # The quoted post is archived with the bookmark that quotes it, marked so
-    # its words are never mistaken for the bookmarker's own.
+    # its words and pictures are never mistaken for the bookmarker's own.
     assert page.items[0].text == "完整长文\n\n【引用 @quoted_writer】\nquoted"
     assert page.items[0].author == "writer"
+    assert [m["media_url_https"] for m in page.items[0].media] == [
+        "https://pbs.twimg.com/media/q.jpg"
+    ]
+    assert page.items[0].media[0]["quoted"] is True
     assert page.items[0].published_at == "2026-09-07T01:00:00+00:00"
     assert page.next_cursor == "older"
 

@@ -80,25 +80,34 @@ def article_body(value: dict) -> tuple[str, str, list[dict]]:
     return (result.get("title") or "").strip(), body, media
 
 
-def quoted_post(value: dict) -> tuple[str, str]:
-    """Author and text of the post this one quotes.
+def quoted_post(value: dict) -> tuple[str, str, list[dict]]:
+    """Author, text and images of the post this one quotes.
 
     A quote-tweet's own words are often a one-line endorsement; the substance
     is in the post being quoted, which the timeline returns but we never read.
+    Each image is marked `quoted`, so the archive keeps them apart from the
+    bookmarker's own media all the way to the rendered report.
     """
     result = (value.get("quoted_status_result") or {}).get("result") or {}
     while result.get("__typename") == "TweetWithVisibilityResults":
         result = result.get("tweet", {})
+    legacy = result.get("legacy") or {}
     note = (result.get("note_tweet") or {}).get("note_tweet_results", {}).get("result") or {}
-    text = note.get("text") or (result.get("legacy") or {}).get("full_text") or ""
-    title, body, _ = article_body(result)
+    text = note.get("text") or legacy.get("full_text") or ""
+    title, body, article_media = article_body(result)
     if body:
         text = "\n\n".join(part for part in (title, body) if part)
     user = (result.get("core") or {}).get("user_results", {}).get("result") or {}
     author = user.get("core", {}).get("screen_name") or user.get("legacy", {}).get(
         "screen_name", ""
     )
-    return (author, html.unescape(text).strip()) if text.strip() else ("", "")
+    if not text.strip():
+        return "", "", []
+    media = [
+        {**entry, "quoted": True}
+        for entry in article_media + (legacy.get("extended_entities") or {}).get("media", [])
+    ]
+    return author, html.unescape(text).strip(), media
 
 
 def parse_tweet(value: dict) -> Item | None:
@@ -125,7 +134,7 @@ def parse_tweet(value: dict) -> Item | None:
         # A link-only post carries nothing of its own; keep any real words it has.
         own = re.sub(r"https://t\.co/\w+", "", text).strip()
         text = "\n\n".join(part for part in (own, title, body) if part)
-    quoted_author, quoted_text = quoted_post(value)
+    quoted_author, quoted_text, quoted_media = quoted_post(value)
     if quoted_text:
         # Marked, so the archive never presents someone else's words as the
         # bookmark's own.
@@ -151,7 +160,9 @@ def parse_tweet(value: dict) -> Item | None:
             for u in entities.get("urls", [])
             if u.get("expanded_url") or u.get("url")
         ],
-        media=legacy.get("extended_entities", {}).get("media", []) + article_media,
+        media=legacy.get("extended_entities", {}).get("media", [])
+        + article_media
+        + quoted_media,
     )
 
 
