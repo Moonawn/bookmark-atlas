@@ -20,6 +20,7 @@ from .preferences import load, next_daily, setup, validate
 from .replay import replay
 from .store import Store
 from .sync import process_lock, sync
+from .wiki import search_notes
 from .watch import read_rules, run_watches, save_rule
 from .wiki import apply_notes, export_wiki, wiki_status
 
@@ -124,7 +125,9 @@ def parser():
     cmd.add_argument("--since", help="只重放该时间之后捕获的响应（ISO 时间）")
     cmd.add_argument("--until", help="只重放该时间之前捕获的响应（ISO 时间）")
     cmd.add_argument("--apply", action="store_true", help="把差异合并回库；默认只报告，不写入")
-    cmd = commands.add_parser("search", help="搜索本地原文、作者和链接（支持中文子串）")
+    cmd = commands.add_parser(
+        "search", help="搜索本地原文与知识笔记，返回命中位置附近的摘要（支持中文子串）"
+    )
     cmd.add_argument("query")
     cmd.add_argument("--limit", type=positive, default=20)
     auth = commands.add_parser("auth", help="身份检查和官方 OAuth 登录").add_subparsers(
@@ -323,16 +326,27 @@ def run(args):
             if args.command == "replay":
                 return replay(store, since=args.since, until=args.until, apply=args.apply)
             if args.command == "search":
-                return [
-                    {
-                        "item_id": r["item_id"],
-                        "author": r["document"]["author"],
-                        "url": r["document"]["url"],
-                        "length": len(r["document"]["text"]),
-                        "snippet": match_snippet(r["document"], args.query),
-                    }
-                    for r in store.items(args.query, args.limit)
-                ]
+                return {
+                    "items": [
+                        {
+                            "item_id": r["item_id"],
+                            "author": r["document"]["author"],
+                            "url": r["document"]["url"],
+                            "length": len(r["document"]["text"]),
+                            "snippet": match_snippet(r["document"]["text"], args.query),
+                        }
+                        for r in store.items(args.query, args.limit)
+                    ],
+                    "notes": [
+                        {
+                            "slug": n["slug"],
+                            "title": n["title"],
+                            "path": f"wiki/notes/{n['slug']}.md",
+                            "snippet": match_snippet(n["body"], args.query),
+                        }
+                        for n in search_notes(home / "wiki", args.query, args.limit)
+                    ],
+                }
             if args.command == "wiki":
                 try:
                     payload = json.loads(args.input.expanduser().read_text())

@@ -16,14 +16,14 @@ def safe_text(value: str) -> str:
     return re.sub(r"([\\`*_{}\[\]()#!|])", r"\\\1", html.escape(value))
 
 
-def match_snippet(document: dict, query: str, width: int = 240) -> str:
+def match_snippet(text: str, query: str, width: int = 240) -> str:
     """A short excerpt around the first match, for reading search results.
 
     Posts are archived in full, so returning the whole text makes a result
-    list unreadable. When the match is in a field other than the text (an
-    author name, a URL), fall back to the head of the post.
+    list unreadable. With no match — the hit was in a field other than the
+    text, such as an author or a URL — fall back to the head of the text.
     """
-    text = re.sub(r"\s+", " ", document.get("text", "")).strip()
+    text = re.sub(r"\s+", " ", text).strip()
     at = text.casefold().find(query.casefold())
     if at < 0:
         return text[:width] + ("…" if len(text) > width else "")

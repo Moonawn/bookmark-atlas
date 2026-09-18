@@ -12,6 +12,10 @@ from .export import export_markdown, local_media, safe_text
 from .models import AtlasError, now, source_key
 from .taxonomy import classify, load_taxonomy
 
+# Every note carries this line under its title, before the real body. Written
+# and read in one place so the two never drift apart.
+NOTE_MARKER = "自动整理 · 待核对原文"
+
 
 def manifest_for(target):
     path = target / "manifest.json"
@@ -64,6 +68,37 @@ def wiki_status(store, target: Path):
         except (OSError, ValueError):
             last = None
     return {"pending": pending, "last_compile": last}
+
+
+def search_notes(target: Path, query: str, limit: int = 20) -> list[dict]:
+    """Notes whose title or body contains the query.
+
+    Only the text above the first section heading is searched. The trailing
+    「来源」and「相关知识」sections hold source hashes and other notes' slugs,
+    so searching them would return every note that merely links to a match.
+    """
+    directory = target / "notes"
+    if not directory.is_dir():
+        return []
+    needle = query.casefold()
+    titled, body_only = [], []
+    for path in sorted(directory.glob("*.md")):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        # Title and body only; the marker line is template, not content.
+        front = text.split("\n## ", 1)[0].strip()
+        if needle not in front.casefold():
+            continue
+        lines = front.split("\n")
+        title = lines[0].lstrip("# ").strip()
+        body = "\n".join(lines[1:]).strip()
+        if body.startswith(NOTE_MARKER):
+            body = body[len(NOTE_MARKER) :].strip()
+        record = {"slug": path.stem, "title": title, "body": body}
+        (titled if needle in title.casefold() else body_only).append(record)
+    return (titled + body_only)[:limit]
 
 
 def export_wiki(store, target: Path, engine: str):
@@ -178,7 +213,7 @@ def apply_notes(store, target: Path, payload: dict):
         lines = [
             f"# {safe_text(note['title'])}",
             "",
-            "自动整理 · 待核对原文",
+            NOTE_MARKER,
             "",
             safe_text(note["body"]),
             "",

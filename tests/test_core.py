@@ -342,18 +342,16 @@ def test_volatile_media_counters_do_not_reanalyze_or_duplicate_media(store):
 
 def test_match_snippet_windows_around_the_match_and_survives_no_match():
     long_text = "前言 " * 200 + "关键词在这里 " + "后文 " * 200
-    document = {"text": long_text}
-    snippet = match_snippet(document, "关键词")
+    snippet = match_snippet(long_text, "关键词")
     assert "关键词在这里" in snippet
     assert len(snippet) < 300
     assert snippet.startswith("…") and snippet.endswith("…")
 
-    # A match outside the text (an author name, a URL) must still show something.
-    head = match_snippet(document, "不存在的词", width=60)
+    # A match in some other field (an author, a URL) must still show something.
+    head = match_snippet(long_text, "不存在的词", width=60)
     assert head.startswith("前言") and head.endswith("…") and len(head) <= 61
 
-    short = match_snippet({"text": "很短"}, "短")
-    assert short == "很短"
+    assert match_snippet("很短", "短") == "很短"
 
 
 def test_search_command_returns_readable_snippets(tmp_path):
@@ -366,9 +364,36 @@ def test_search_command_returns_readable_snippets(tmp_path):
     store.close()
 
     args = parser().parse_args(["--home", str(tmp_path), "search", "关键词"])
-    results = run(args)
-    assert len(results) == 1
-    assert results[0]["item_id"] == "a"
-    assert "关键词" in results[0]["snippet"]
-    assert len(results[0]["snippet"]) < 300
-    assert results[0]["length"] > 100
+    result = run(args)
+    assert list(result) == ["items", "notes"]
+    assert len(result["items"]) == 1
+    assert result["items"][0]["item_id"] == "a"
+    assert "关键词" in result["items"][0]["snippet"]
+    assert len(result["items"][0]["snippet"]) < 300
+    assert result["items"][0]["length"] > 100
+
+
+def test_search_covers_notes_but_not_the_sections_that_link_to_them(tmp_path):
+    from bookmark_atlas.cli import parser, run
+
+    notes = tmp_path / "wiki" / "notes"
+    notes.mkdir(parents=True)
+    (notes / "agent-memory.md").write_text(
+        "# Agent 记忆的五层结构\n\n正文提到遗忘引擎。\n\n"
+        "## 来源\n\n- [某人](../sources/items/abc.md)\n\n"
+        "## 相关知识\n\n- [unrelated-slug](other.md)\n",
+        encoding="utf-8",
+    )
+    (notes / "linking-note.md").write_text(
+        "# 另一篇\n\n正文没有那个词。\n\n## 相关知识\n\n- [agent-memory](agent-memory.md)\n",
+        encoding="utf-8",
+    )
+    Store(tmp_path).close()
+
+    found = run(parser().parse_args(["--home", str(tmp_path), "search", "遗忘引擎"]))
+    assert [n["slug"] for n in found["notes"]] == ["agent-memory"]
+    assert found["notes"][0]["title"] == "Agent 记忆的五层结构"
+    assert found["notes"][0]["path"] == "wiki/notes/agent-memory.md"
+
+    # A slug only reachable through the trailing link sections is not a match.
+    assert run(parser().parse_args(["--home", str(tmp_path), "search", "unrelated-slug"]))["notes"] == []
