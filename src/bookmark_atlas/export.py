@@ -16,6 +16,22 @@ def safe_text(value: str) -> str:
     return re.sub(r"([\\`*_{}\[\]()#!|])", r"\\\1", html.escape(value))
 
 
+def match_snippet(document: dict, query: str, width: int = 240) -> str:
+    """A short excerpt around the first match, for reading search results.
+
+    Posts are archived in full, so returning the whole text makes a result
+    list unreadable. When the match is in a field other than the text (an
+    author name, a URL), fall back to the head of the post.
+    """
+    text = re.sub(r"\s+", " ", document.get("text", "")).strip()
+    at = text.casefold().find(query.casefold())
+    if at < 0:
+        return text[:width] + ("…" if len(text) > width else "")
+    start = max(0, at - width // 3)
+    end = min(len(text), start + width)
+    return ("…" if start else "") + text[start:end] + ("…" if end < len(text) else "")
+
+
 def export_json(store, target: Path):
     documents = store.items()
     atomic_write(

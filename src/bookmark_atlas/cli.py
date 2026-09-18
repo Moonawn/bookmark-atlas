@@ -12,7 +12,7 @@ from .adapters.x_api import XAPI
 from .adapters.x_web import XWeb
 from .analysis import LocalAnalysis, OllamaAnalysis, analyze_pending
 from .config import home_path
-from .export import export_json, export_markdown
+from .export import export_json, export_markdown, match_snippet
 from .media import fetch_media
 from .models import AtlasError, RateLimitError
 from .oauth import login
@@ -323,7 +323,16 @@ def run(args):
             if args.command == "replay":
                 return replay(store, since=args.since, until=args.until, apply=args.apply)
             if args.command == "search":
-                return [r["document"] for r in store.items(args.query, args.limit)]
+                return [
+                    {
+                        "item_id": r["item_id"],
+                        "author": r["document"]["author"],
+                        "url": r["document"]["url"],
+                        "length": len(r["document"]["text"]),
+                        "snippet": match_snippet(r["document"], args.query),
+                    }
+                    for r in store.items(args.query, args.limit)
+                ]
             if args.command == "wiki":
                 try:
                     payload = json.loads(args.input.expanduser().read_text())

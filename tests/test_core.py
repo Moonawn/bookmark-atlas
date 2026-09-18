@@ -4,7 +4,7 @@ import time
 import pytest
 
 from bookmark_atlas.analysis import LocalAnalysis, analyze_pending
-from bookmark_atlas.export import export_json, export_markdown
+from bookmark_atlas.export import export_json, export_markdown, match_snippet
 from bookmark_atlas.models import (
     AuthError,
     Identity,
@@ -338,3 +338,37 @@ def test_volatile_media_counters_do_not_reanalyze_or_duplicate_media(store):
     assert execute(store, Fake({None: page(second)}))["updated"] == 0
     assert analyze_pending(store, LocalAnalysis())["analyzed"] == 0
     assert len(store.items()[0]["document"]["media"]) == 1
+
+
+def test_match_snippet_windows_around_the_match_and_survives_no_match():
+    long_text = "前言 " * 200 + "关键词在这里 " + "后文 " * 200
+    document = {"text": long_text}
+    snippet = match_snippet(document, "关键词")
+    assert "关键词在这里" in snippet
+    assert len(snippet) < 300
+    assert snippet.startswith("…") and snippet.endswith("…")
+
+    # A match outside the text (an author name, a URL) must still show something.
+    head = match_snippet(document, "不存在的词", width=60)
+    assert head.startswith("前言") and head.endswith("…") and len(head) <= 61
+
+    short = match_snippet({"text": "很短"}, "短")
+    assert short == "很短"
+
+
+def test_search_command_returns_readable_snippets(tmp_path):
+    """Guards the CLI branch itself: a missing import there is a NameError, and
+    main() reports only the exception type, so nothing else would catch it."""
+    from bookmark_atlas.cli import parser, run
+
+    store = Store(tmp_path)
+    execute(store, Fake({None: page(item("a", text="开头 " * 50 + "关键词" + " 结尾" * 50))}))
+    store.close()
+
+    args = parser().parse_args(["--home", str(tmp_path), "search", "关键词"])
+    results = run(args)
+    assert len(results) == 1
+    assert results[0]["item_id"] == "a"
+    assert "关键词" in results[0]["snippet"]
+    assert len(results[0]["snippet"]) < 300
+    assert results[0]["length"] > 100
