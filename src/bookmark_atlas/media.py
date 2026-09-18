@@ -51,13 +51,13 @@ def best_video(media: dict) -> str | None:
     return max(variants, key=lambda variant: variant.get("bitrate") or 0)["url"]
 
 
-def targets(document: dict) -> list[dict[str, Any]]:
+def targets(document: dict, video_limit: int = VIDEO_LIMIT) -> list[dict[str, Any]]:
     """What this item's media should become on disk, in order."""
     found = []
     for media in document.get("media", []):
         thumb = media.get("media_url_https")
         if video := best_video(media):
-            found.append({"kind": "video", "url": video, "thumbnail": thumb, "limit": VIDEO_LIMIT})
+            found.append({"kind": "video", "url": video, "thumbnail": thumb, "limit": video_limit})
         elif thumb:
             found.append(
                 {
@@ -135,6 +135,8 @@ def fetch_media(
     limit: int | None = None,
     dry_run: bool = False,
     fetch_videos: bool = False,
+    items: list[str] | None = None,
+    video_limit_mb: int | None = None,
 ) -> dict:
     """Download media for archived items that do not have it yet.
 
@@ -142,18 +144,30 @@ def fetch_media(
     tells you what the video was, at a fraction of the size, and one long
     video can outweigh everything else in the archive. The full URL is still
     recorded either way, so the choice can be revisited.
+
+    Naming items explicitly reprocesses them even if already indexed, which is
+    how a video that was framed earlier gets fetched in full. `video_limit_mb`
+    raises the size cap for this run only.
     """
     target = home / "media"
     if not dry_run:
         private_dir(target)
     index = load_index(target)
-    rows = [
-        row
-        for row in store.items()
-        if row["document"].get("media") and source_key(row["document"]) not in index
-    ]
+    wanted = set(items) if items else None
+    rows = []
+    for row in store.items():
+        document = row["document"]
+        if not document.get("media"):
+            continue
+        key = source_key(document)
+        if wanted is not None:
+            if key in wanted:
+                rows.append(row)
+        elif key not in index:
+            rows.append(row)
     if limit:
         rows = rows[:limit]
+    video_limit = video_limit_mb * 1024 * 1024 if video_limit_mb else VIDEO_LIMIT
 
     downloaded = oversized = frames = failed = 0
     bytes_total = 0
@@ -164,7 +178,7 @@ def fetch_media(
             document = row["document"]
             key = source_key(document)
             files: list[dict] = []
-            for number, item in enumerate(targets(document), start=1):
+            for number, item in enumerate(targets(document, video_limit), start=1):
                 name = f"{key}-{number}"
                 is_video = item["kind"] == "video"
                 skip_video = is_video and not fetch_videos

@@ -109,6 +109,17 @@ def parser():
     cmd.add_argument("--limit", type=positive, help="本次最多处理多少条收藏")
     cmd.add_argument("--dry-run", action="store_true", help="只列出待下载项，不写盘")
     cmd.add_argument("--with-videos", action="store_true", help="连视频一起下载；默认只存首帧截图")
+    cmd.add_argument(
+        "--item",
+        action="append",
+        metavar="KEY",
+        help="只处理指定收藏（source key，可重复）；配合 --with-videos 用于点名下载",
+    )
+    cmd.add_argument(
+        "--max-video-mb",
+        type=positive,
+        help="本次的单个视频上限（MB），默认 100；只放宽这一次，不改默认值",
+    )
     cmd = commands.add_parser("replay", help="用当前解析器重新解析已存的原始响应")
     cmd.add_argument("--since", help="只重放该时间之后捕获的响应（ISO 时间）")
     cmd.add_argument("--until", help="只重放该时间之前捕获的响应（ISO 时间）")
@@ -306,6 +317,8 @@ def run(args):
                     limit=args.limit,
                     dry_run=args.dry_run,
                     fetch_videos=args.with_videos,
+                    items=args.item,
+                    video_limit_mb=args.max_video_mb,
                 )
             if args.command == "replay":
                 return replay(store, since=args.since, until=args.until, apply=args.apply)
