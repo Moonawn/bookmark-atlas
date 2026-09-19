@@ -2,7 +2,7 @@
 
 # Bookmark Atlas
 
-### A home for what you save. Ready when you need it.
+### Let collection be more than mere saving.
 
 [简体中文](README.md) · **English**
 
@@ -16,7 +16,7 @@
 
 You read plenty of posts, then struggle to find the useful ones when you need them. Your bookmarks grow; organizing them stays on the to-do list.
 
-**Set it up once. Keep bookmarking.** Bookmark Atlas saves useful material to your computer on your schedule. Preserve the original posts, organize topics, or ask your Agent to build connected notes with sources—without repeatedly copying batches of links.
+**Set once, save beyond.** Bookmark Atlas saves useful material to your computer on your schedule. Preserve the original posts, organize topics, or ask your Agent to build connected notes with sources—without repeatedly copying batches of links.
 
 Find what you saved, check its context, and use it to work through your next question.
 
