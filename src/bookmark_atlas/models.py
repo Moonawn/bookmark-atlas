@@ -5,6 +5,27 @@ import json
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Protocol
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+
+def stable_media_url(url: str) -> str:
+    """Compare X CDN assets without their delivery/signing parameters.
+
+    Keep unknown hosts and parameters, including image name/format selectors.
+    The original URL is always retained for downloading.
+    """
+    parsed = urlsplit(url)
+    if parsed.hostname not in ("video.twimg.com", "pbs.twimg.com"):
+        return url
+    volatile = {"expires", "signature", "key-pair-id", "policy"}
+    if parsed.hostname == "video.twimg.com":
+        volatile |= {"tag", "v"}
+    pairs = [
+        (key, value)
+        for key, value in parse_qsl(parsed.query, keep_blank_values=True)
+        if key.lower() not in volatile and not key.lower().startswith("x-amz-")
+    ]
+    return urlunsplit(parsed._replace(query=urlencode(sorted(pairs))))
 
 
 def now() -> str:

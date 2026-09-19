@@ -83,7 +83,7 @@ uv run bookmark-atlas sync --mode api
 
 ## Use with an Agent
 
-[**Download the Skill (v0.3.0)**](https://github.com/Moonawn/bookmark-atlas/releases/download/v0.3.0/bookmark-atlas-skill-0.3.0.zip) · [Read the Skill](skills/bookmark-atlas/SKILL.md) · [Installation](docs/wiki.md#使用-skill--use-the-skill)
+[**Download the Skill (v0.4.0)**](https://github.com/Moonawn/bookmark-atlas/releases/download/v0.4.0/bookmark-atlas-skill-0.4.0.zip) · [Read the Skill](skills/bookmark-atlas/SKILL.md) · [Installation](docs/wiki.md#使用-skill--use-the-skill)
 
 Extract the archive and copy the entire `bookmark-atlas/` folder into your Agent host's supported Skills directory, or ask your Agent to read the repository Skill directly. Install the CLI first using the steps above.
 
@@ -122,7 +122,7 @@ Enabled rules run during future `sync` calls and existing schedules. Bookmarks a
 
 SQLite stores the archive, Markdown makes it readable, and JSON makes it portable. Repeated syncs do not duplicate unchanged items. Previously saved bookmarks remain even when missing from a later response. If analysis fails, the original material and sync progress remain available for a separate retry.
 
-Images can be downloaded locally with `fetch-media`; videos keep a first frame and their original address, and both record their source. Complete threads and linked-page bodies remain outside the current scope. X website changes can affect the web adapter. See [compatibility and test coverage](docs/verification.md).
+Images can be downloaded locally with `fetch-media`; videos keep a first frame and their original address, and both record their source. Embedded X Articles and quoted posts are captured when returned by X. Complete threads and arbitrary external page bodies remain outside the current scope. X website changes can affect the web adapter. See [compatibility and test coverage](docs/verification.md).
 
 ---
 

@@ -20,9 +20,8 @@ from .preferences import load, next_daily, setup, validate
 from .replay import replay
 from .store import Store
 from .sync import process_lock, sync
-from .wiki import search_notes
 from .watch import read_rules, run_watches, save_rule
-from .wiki import apply_notes, export_wiki, wiki_status
+from .wiki import apply_notes, export_wiki, search_notes, wiki_status
 
 
 def positive(value):
@@ -56,6 +55,9 @@ def parser():
         )
         cmd.add_argument("--overlap-pages", type=positive, default=2)
         cmd.add_argument("--no-analyze", action="store_true")
+        cmd.add_argument(
+            "--media", choices=["none", "images"], help="同步后归档图片和视频封面；默认继承保存设置"
+        )
         cmd.add_argument("--organization", choices=["topics", "wiki"])
         cmd.add_argument("--ollama-model", help="使用已安装的本地 Ollama 模型生成中文摘要")
         if name == "serve":
@@ -172,6 +174,12 @@ def cycle(args, home):
                 )
             except AtlasError as exc:
                 result["watch"] = {"failed": True, "error": str(exc)}
+            if args.media == "images":
+                try:
+                    result["media"] = fetch_media(store, home)
+                except AtlasError as exc:
+                    result["media"] = {"failed": True, "error": str(exc)}
+            result["json"] = export_json(store, home / "exports" / "bookmarks.json")
             if not args.no_analyze:
                 engine = engine_for(args)
                 result["analysis"] = analyze_pending(store, engine, limit=500)
@@ -192,7 +200,7 @@ def run(args):
     settings = load(home)
     if args.command == "settings":
         return settings
-    for key in ("mode", "browser", "organization", "ollama_model"):
+    for key in ("mode", "browser", "organization", "ollama_model", "media"):
         if hasattr(args, key) and getattr(args, key) is None:
             setattr(args, key, settings[key])
     if args.command == "auth":
@@ -285,6 +293,10 @@ def run(args):
                     result["added"]
                     or result["updated"]
                     or result.get("analysis", {}).get("failed")
+                    or any(
+                        result.get("media", {}).get(k)
+                        for k in ("downloaded", "video_frames", "failed")
+                    )
                     or any(result.get("watch", {}).get(k) for k in ("added", "updated", "failed"))
                 ):
                     print(json.dumps(result, ensure_ascii=False), flush=True)
@@ -404,6 +416,7 @@ def main():
             result.get("failed")
             or result.get("analysis", {}).get("failed")
             or result.get("watch", {}).get("failed")
+            or result.get("media", {}).get("failed")
         ):
             return 1
         return 0

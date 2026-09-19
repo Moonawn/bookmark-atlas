@@ -20,9 +20,11 @@ import json
 from pathlib import Path
 from typing import Any
 
+import httpx
+
 from .config import atomic_write, private_dir
 from .http import network_client
-from .models import AtlasError, now, source_key
+from .models import AtlasError, digest, now, source_key, stable_media_url
 from .store import Store
 
 PHOTO_LIMIT = 5 * 1024 * 1024
@@ -109,7 +111,7 @@ def download(client, url: str, part: Path, limit: int) -> tuple[int, str]:
     than kept, so a partial download never masquerades as the real thing.
     """
     with client.stream("GET", url) as response:
-        if response.status_code >= 400:
+        if response.status_code != 200:
             raise AtlasError(f"媒体请求失败（HTTP {response.status_code}）。")
         content_type = (response.headers.get("content-type") or "").split(";")[0].strip()
         written = 0
@@ -131,15 +133,51 @@ def keep_thumbnail(client, item: dict, name: str, target: Path) -> str | None:
         return None
     part = target / f"{name}-thumb.part"
     try:
-        written, _ = download(client, url, part, PHOTO_LIMIT)
-    except (AtlasError, OSError):
+        written, content_type = download(client, url, part, PHOTO_LIMIT)
+    except (AtlasError, OSError, httpx.HTTPError):
         part.unlink(missing_ok=True)
         return None
     if written > PHOTO_LIMIT:
         return None
-    final = target / f"{name}-thumb.jpg"
+    if not content_type.startswith("image/") or content_type not in SUFFIXES:
+        part.unlink(missing_ok=True)
+        return None
+    final = target / f"{name}-thumb{SUFFIXES[content_type]}"
     part.replace(final)
     return final.name
+
+
+def existing_file(target: Path, name: str | None) -> bool:
+    return bool(name and Path(name).name == name and (target / name).is_file())
+
+
+def matching_record(records: list[dict], item: dict) -> dict:
+    identity = stable_media_url(item["url"])
+    return next(
+        (
+            record
+            for record in records
+            if stable_media_url(record.get("source_url") or record.get("original") or "")
+            == identity
+        ),
+        {},
+    )
+
+
+def complete(record: dict, item: dict, target: Path, fetch_videos: bool) -> bool:
+    if record.get("error"):
+        return False
+    if existing_file(target, record.get("file")):
+        return True
+    if not existing_file(target, record.get("thumbnail")):
+        return False
+    if record.get("skipped") == "video_not_downloaded":
+        return not fetch_videos
+    if record.get("skipped") == "over_limit":
+        return item["limit"] <= record.get(
+            "limit", VIDEO_LIMIT if item["kind"] == "video" else PHOTO_LIMIT
+        )
+    return False
 
 
 def fetch_media(
@@ -152,16 +190,10 @@ def fetch_media(
     items: list[str] | None = None,
     video_limit_mb: int | None = None,
 ) -> dict:
-    """Download media for archived items that do not have it yet.
+    """Resume each asset independently; retain successful files and retry failures.
 
-    Videos are not downloaded unless `fetch_videos` is set: a single frame
-    tells you what the video was, at a fraction of the size, and one long
-    video can outweigh everything else in the archive. The full URL is still
-    recorded either way, so the choice can be revisited.
-
-    Naming items explicitly reprocesses them even if already indexed, which is
-    how a video that was framed earlier gets fetched in full. `video_limit_mb`
-    raises the size cap for this run only.
+    Video binaries are opt-in. A larger cap retries earlier oversized assets.
+    Index progress is saved after each item, including failures with provenance.
     """
     target = home / "media"
     if not dry_run:
@@ -172,100 +204,94 @@ def fetch_media(
     rows = []
     for row in store.items():
         document = row["document"]
-        if not document.get("media"):
-            continue
         key = source_key(document)
-        if wanted is not None:
-            if key in wanted:
-                rows.append(row)
+        if wanted is not None and key not in wanted:
             continue
-        # An item is done only when the index covers everything it now holds;
-        # a parser improvement that finds more media must not be skipped as
-        # already fetched.
-        covered = len(index.get(key, {}).get("files", []))
-        if key not in index or covered < len(targets(document, video_limit)):
+        records = index.get(key, {}).get("files", [])
+        if any(
+            not complete(matching_record(records, item), item, target, fetch_videos)
+            for item in targets(document, video_limit)
+        ):
             rows.append(row)
     if limit:
         rows = rows[:limit]
 
-    downloaded = oversized = frames = failed = 0
+    downloaded = oversized = frames = failed = reused = 0
     bytes_total = 0
     touched: list[dict] = []
-
     with network_client(follow_redirects=True) as client:
         for row in rows:
             document = row["document"]
             key = source_key(document)
+            previous = index.get(key, {}).get("files", [])
             files: list[dict] = []
+            # Preserve names of reused assets even if the source order changed.
             for number, item in enumerate(targets(document, video_limit), start=1):
-                name = f"{key}-{number}"
-                is_video = item["kind"] == "video"
-                skip_video = is_video and not fetch_videos
-                base: dict[str, Any] = {
+                old = matching_record(previous, item)
+                base = {
                     "n": number,
                     "kind": item["kind"],
                     "quoted": item["quoted"],
+                    "source_url": item["url"],
                 }
+                if complete(old, item, target, fetch_videos):
+                    files.append({**old, **base})
+                    reused += 1
+                    continue
+                skip_video = item["kind"] == "video" and not fetch_videos
                 if dry_run:
-                    files.append(
-                        {
-                            **base,
-                            "plan": "thumbnail" if skip_video else "download",
-                            "url": item["url"],
-                        }
-                    )
+                    files.append({**base, "plan": "thumbnail" if skip_video else "download"})
                     continue
-                if skip_video:
-                    frames += 1
-                    record = {
-                        **base,
-                        "skipped": "video_not_downloaded",
-                        "original": item["url"],
-                    }
-                    if thumb := keep_thumbnail(client, item, name, target):
-                        record["thumbnail"] = thumb
-                    files.append(record)
-                    continue
+                # Asset identity, rather than list position, avoids overwriting a
+                # different reused file when a post gains/reorders its images.
+                name = f"{key}-{digest(stable_media_url(item['url']))[:16]}"
                 part = target / f"{name}.part"
-                try:
-                    written, content_type = download(client, item["url"], part, item["limit"])
-                except (AtlasError, OSError) as exc:
-                    failed += 1
-                    files.append({**base, "error": str(exc)})
-                    continue
-
-                if written > item["limit"]:
-                    # Too large to keep whole. Keep a frame instead so the post
-                    # still shows what the file was, and record the full URL.
-                    oversized += 1
-                    record = {
-                        **base,
-                        "skipped": "over_limit",
-                        "bytes": written,
-                        "original": item["url"],
-                    }
+                record = dict(base)
+                if skip_video:
+                    record.update(skipped="video_not_downloaded", original=item["url"])
                     if thumb := keep_thumbnail(client, item, name, target):
                         record["thumbnail"] = thumb
-                    files.append(record)
-                    continue
-
-                suffix = SUFFIXES.get(content_type, ".bin")
-                part.replace(target / f"{name}{suffix}")
-                files.append(
-                    {
-                        **base,
-                        "file": f"{name}{suffix}",
-                        "source_url": item["url"],
-                        "bytes": written,
-                    }
-                )
-                downloaded += 1
-                bytes_total += written
-
-            # Only record work that actually finished. An item whose every file
-            # errored is left out so the next run retries it, instead of being
-            # skipped forever as already done.
-            if not dry_run and any(entry.get("file") or entry.get("skipped") for entry in files):
+                        frames += 1
+                    else:
+                        record["error"] = "视频封面下载失败；下次重试。"
+                        failed += 1
+                else:
+                    try:
+                        written, content_type = download(client, item["url"], part, item["limit"])
+                        if written > item["limit"]:
+                            oversized += 1
+                            record.update(
+                                skipped="over_limit",
+                                original=item["url"],
+                                bytes=written,
+                                limit=item["limit"],
+                            )
+                            if thumb := keep_thumbnail(client, item, name, target):
+                                record["thumbnail"] = thumb
+                            else:
+                                record["error"] = "文件超限且缩略图下载失败；下次重试。"
+                                failed += 1
+                        else:
+                            if content_type not in SUFFIXES:
+                                raise AtlasError("媒体响应不是支持的图片或视频格式。")
+                            final = f"{name}{SUFFIXES[content_type]}"
+                            part.replace(target / final)
+                            record.update(file=final, bytes=written)
+                            downloaded += 1
+                            bytes_total += written
+                    except (AtlasError, OSError, httpx.HTTPError) as exc:
+                        failed += 1
+                        # Transport errors can include signed URLs; keep diagnostics safe.
+                        record["error"] = (
+                            str(exc) if isinstance(exc, AtlasError) else type(exc).__name__
+                        )
+                        # Preserve an earlier thumbnail when upgrading to the video fails.
+                        if existing_file(target, old.get("thumbnail")):
+                            record["thumbnail"] = old["thumbnail"]
+                    finally:
+                        part.unlink(missing_ok=True)
+                files.append(record)
+            if not dry_run:
                 index[key] = {
                     "item_id": document["item_id"],
                     "url": document.get("url", ""),
@@ -273,16 +299,14 @@ def fetch_media(
                     "fetched_at": now(),
                     "files": files,
                 }
+                save_index(target, index)
             touched.append({"key": key, "files": files})
-
-    if not dry_run and touched:
-        save_index(target, index)
 
     stored = sum(
         entry["bytes"]
         for record in index.values()
         for entry in record.get("files", [])
-        if entry.get("bytes") and not entry.get("skipped")
+        if entry.get("file") and entry.get("bytes")
     )
     return {
         "items": len(rows),
@@ -290,6 +314,7 @@ def fetch_media(
         "video_frames": frames,
         "oversized": oversized,
         "failed": failed,
+        "reused": reused,
         "bytes": bytes_total,
         "stored_total_bytes": stored,
         "over_total_warn": stored > TOTAL_WARN,

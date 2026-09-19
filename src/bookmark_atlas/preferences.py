@@ -20,8 +20,10 @@ DEFAULTS = dict(
     organization="topics",
     summary="rules",
     ollama_model=None,
+    media="none",
 )
 CHOICES = {
+    "media": ("none", "images"),
     "mode": ("auto", "web", "api"),
     "browser": ("chrome", "firefox", "brave", "edge", "chromium", "quark"),
     "schedule": ("manual", "daily", "interval"),

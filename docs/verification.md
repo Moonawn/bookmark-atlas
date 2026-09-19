@@ -12,7 +12,7 @@
 
 | Component | Coverage |
 |---|---|
-| Archive and adapters | 103 automated cases covering normalization, paging, merging, transactions, recovery, setup, scheduling, Wiki provenance, media fetching and capture replay |
+| Archive and adapters | 116 automated cases covering normalization, paging, merging, transactions, recovery, setup, scheduling, Wiki provenance, media fetching and capture replay |
 | X web adapter | Live authentication, historical collection, repeat sync, Following and UserTweets access, and automatic adapter selection |
 | Official X API | Mock HTTP coverage for identity, paging, expansions, long posts, author/following routes, errors and token refresh; live OAuth validation remains pending |
 | Ollama | Mock HTTP coverage for output validation, retries and local endpoint restrictions; live model validation remains pending |
@@ -26,6 +26,6 @@
 - Missing posts are retained in the local archive.
 - Account mismatch stops the sync. Rate limits create a cooldown shared by both X entry points.
 - Unrecognized timeline structures produce an error rather than an empty collection.
-- Media metadata is stored during collection. `fetch-media` downloads images; videos are framed rather than downloaded unless `--with-videos` is given. Complete threads and linked-page bodies remain outside the collection scope.
+- Media metadata is stored during collection. `fetch-media` downloads images; videos are framed rather than downloaded unless `--with-videos` is given. Embedded X Articles and quoted posts are read when present in the response; complete threads and arbitrary external page bodies remain outside the collection scope.
 
 See [GitHub Actions](https://github.com/Moonawn/bookmark-atlas/actions) for current checks and [architecture](architecture.md) for the data flow.

@@ -89,6 +89,14 @@ Replay writes only the `items` table. Memberships, origins, checkpoints and the 
 
 Each sync checks the newest bookmarks before resuming unfinished history. A newly bookmarked old post counts as new. Two entirely known pages form the normal overlap boundary. `--full` disables that early stop; `--max-pages` bounds a run. The default limit is 50 pages.
 
-`partial` means the page budget was reached; run again to continue. `complete` means the current endpoint ended, not that deleted or inaccessible posts were recovered. `incremental` means the known overlap boundary was reached. Missing posts remain in the archive. Media metadata is saved during collection, images can be downloaded with `fetch-media`, and videos keep a frame plus their original address. Whole threads and linked-page bodies remain outside the current scope.
+`partial` means the page budget was reached; run again to continue. `complete` means the current endpoint ended, not that deleted or inaccessible posts were recovered. `incremental` means the known overlap boundary was reached. Missing posts remain in the archive. Media metadata is saved during collection, images can be downloaded with `fetch-media`, and videos keep a frame plus their original address. Embedded X Articles and quoted posts are captured when returned by X. Whole threads and arbitrary external page bodies remain outside the current scope.
 
 [定向作者与关注列表采集 / Directed authors and following lists](watch.md)
+
+### Archive images during sync
+
+Run `sync --media images` to download photos and video covers after collection, before refreshing JSON, reports and Wiki sources. Add `"media": "images"` to private `settings.json` to let existing scheduled syncs inherit this behavior. Older configurations default to `none`; `--media none` overrides one run. Full videos still require `fetch-media --with-videos`.
+
+Downloads resume per asset: successful files are reused, failed or missing files are retried, and newly discovered images do not force a full re-download. `--item KEY` selects posts; combine it with `--with-videos` to upgrade existing covers. Network failures preserve completed progress and are reported separately from collection success.
+
+Content hashes ignore only known X media CDN delivery/signing parameters (video `tag` and `v`, plus signing parameters). Unknown parameters and image size/format selectors remain significant. Download URLs are preserved. Existing source receipts remain valid when semantic content is unchanged, avoiding a full Wiki recompile on upgrade.

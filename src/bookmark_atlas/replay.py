@@ -17,7 +17,7 @@ from typing import Any
 
 from .adapters.x_web import parse_page
 from .models import ParseError, now
-from .store import content_digest, merge_document
+from .store import merge_document, updated_content_hash
 
 
 def replay(
@@ -61,10 +61,10 @@ def replay(
             parsed[item.item_id] = item
 
     known = unknown = 0
-    changed: list[tuple[Any, dict]] = []
+    changed: list[tuple[Any, dict, str]] = []
     for item_id, item in parsed.items():
         old = store.db.execute(
-            "SELECT document FROM items WHERE site=? AND item_id=?",
+            "SELECT document,content_hash FROM items WHERE site=? AND item_id=?",
             (item.site, item_id),
         ).fetchone()
         if not old:
@@ -76,7 +76,9 @@ def replay(
         previous = json.loads(old["document"])
         merged = merge_document(previous, item.to_dict())
         if merged != previous:
-            changed.append((item, merged))
+            changed.append(
+                (item, merged, updated_content_hash(previous, merged, old["content_hash"]))
+            )
 
     result: dict[str, Any] = {
         "captures": len(rows),
@@ -86,19 +88,19 @@ def replay(
         "changed": len(changed),
         "parse_failures": parse_failures,
         "applied": False,
-        "sample": [item.item_id for item, _ in changed[:sample]],
+        "sample": [item.item_id for item, _, _ in changed[:sample]],
     }
     if not apply or not changed:
         return result
 
     stamp = now()
     with store.db:
-        for item, merged in changed:
+        for item, merged, hashed in changed:
             store.db.execute(
                 "UPDATE items SET document=?,content_hash=?,last_seen=? WHERE site=? AND item_id=?",
                 (
                     json.dumps(merged, ensure_ascii=False),
-                    content_digest(merged),
+                    hashed,
                     stamp,
                     item.site,
                     item.item_id,

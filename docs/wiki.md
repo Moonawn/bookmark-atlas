@@ -20,7 +20,7 @@ bookmark-atlas export wiki
 
 ## 使用 Skill / Use the Skill
 
-[下载 Skill 安装包 / Download Skill v0.3.0](https://github.com/Moonawn/bookmark-atlas/releases/download/v0.3.0/bookmark-atlas-skill-0.3.0.zip)
+[下载 Skill 安装包 / Download Skill v0.4.0](https://github.com/Moonawn/bookmark-atlas/releases/download/v0.4.0/bookmark-atlas-skill-0.4.0.zip)
 
 让你使用的 Agent 读取仓库中的 `skills/bookmark-atlas/SKILL.md`。若 Agent 支持文件夹式 Skill 安装，将整个 `skills/bookmark-atlas/` 文件夹复制到该 Agent 的 Skill 目录。CLI 需要先安装；Skill 不会自带另一个运行环境。
 

@@ -113,7 +113,9 @@ def test_failed_items_are_not_recorded_so_they_retry(archive, tmp_path, monkeypa
     report = fetch_media(archive, tmp_path)
     assert report["failed"] == 1
     index = tmp_path / "media/index.json"
-    assert json.loads(index.read_text()) == {}  # nothing recorded, so the next run retries
+    record = next(iter(json.loads(index.read_text()).values()))["files"][0]
+    assert record["error"] and record["source_url"]
+    assert fetch_media(archive, tmp_path)["failed"] == 1
 
 
 def test_videos_are_framed_not_downloaded_by_default(archive, tmp_path, monkeypatch):
@@ -200,11 +202,13 @@ def test_media_added_later_is_fetched_even_though_the_item_is_indexed(
     )
     archive.db.commit()
 
-    # Reprocessing re-fetches the item's whole media list, overwriting the
-    # files already on disk under the same deterministic names.
+    # Preserve the first image and fetch only the newly discovered image.
     result = fetch_media(archive, tmp_path)
-    assert result["items"] == 1 and result["downloaded"] == 2
-    assert [f["quoted"] for f in next(iter(load_index(tmp_path).values()))["files"]] == [False, True]
+    assert result["items"] == 1 and result["downloaded"] == 1 and result["reused"] == 1
+    assert [f["quoted"] for f in next(iter(load_index(tmp_path).values()))["files"]] == [
+        False,
+        True,
+    ]
 
 
 def load_index(tmp_path):

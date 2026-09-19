@@ -396,4 +396,7 @@ def test_search_covers_notes_but_not_the_sections_that_link_to_them(tmp_path):
     assert found["notes"][0]["path"] == "wiki/notes/agent-memory.md"
 
     # A slug only reachable through the trailing link sections is not a match.
-    assert run(parser().parse_args(["--home", str(tmp_path), "search", "unrelated-slug"]))["notes"] == []
+    assert (
+        run(parser().parse_args(["--home", str(tmp_path), "search", "unrelated-slug"]))["notes"]
+        == []
+    )

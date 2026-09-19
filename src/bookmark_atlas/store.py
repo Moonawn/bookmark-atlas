@@ -5,7 +5,7 @@ import sqlite3
 from pathlib import Path
 
 from .config import private_dir
-from .models import Identity, OwnerMismatch, Page, digest, now
+from .models import Identity, OwnerMismatch, Page, digest, now, stable_media_url
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS owners(site TEXT PRIMARY KEY, account_id TEXT NOT NULL, username TEXT);
@@ -51,8 +51,7 @@ def merge_document(old: dict, incoming: dict) -> dict:
                 identity = (
                     entry.get("media_key")
                     or entry.get("id_str")
-                    or entry.get("url")
-                    or entry.get("media_url_https")
+                    or stable_media_url(entry.get("url") or entry.get("media_url_https") or "")
                     or digest(entry)
                 )
                 media[identity] = {**media.get(identity, {}), **entry}
@@ -76,15 +75,33 @@ def content_digest(document: dict) -> str:
     stable = dict(document)
     stable.pop("kind", None)
     stable.pop("language", None)
-    stable["media"] = [
-        {
-            key: value
-            for key, value in entry.items()
-            if key not in ("additional_media_info", "mediaStats", "ext", "indices")
-        }
-        for entry in document.get("media", [])
-    ]
+
+    def normalize(value):
+        if isinstance(value, dict):
+            return {k: normalize(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [normalize(v) for v in value]
+        if isinstance(value, str) and value.startswith("https://"):
+            return stable_media_url(value)
+        return value
+
+    stable["media"] = normalize(
+        [
+            {
+                key: value
+                for key, value in entry.items()
+                if key not in ("additional_media_info", "mediaStats", "ext", "indices")
+            }
+            for entry in document.get("media", [])
+        ]
+    )
     return digest(stable)
+
+
+def updated_content_hash(previous: dict, incoming: dict, prior_hash: str) -> str:
+    """Preserve existing Wiki/analysis receipts across a hash-policy upgrade."""
+    current = content_digest(incoming)
+    return prior_hash if content_digest(previous) == current else current
 
 
 class Store:
@@ -179,6 +196,10 @@ class Store:
                     else item.to_dict()
                 )
                 hashed = content_digest(document)
+                if old:
+                    hashed = updated_content_hash(
+                        json.loads(old["document"]), document, old["content_hash"]
+                    )
                 member = self.db.execute(
                     "SELECT 1 FROM collection_memberships WHERE site=? AND account_id=? AND collection=? AND item_id=?",
                     (identity.site, identity.account_id, collection, item.item_id),

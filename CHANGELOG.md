@@ -1,6 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 — 2026-09-19
+
+- Media downloads resume per asset: retry failed or missing files, reuse successful files, preserve progress on network errors, and upgrade video thumbnails on request.
+- `sync --media images` and saved `media: images` archive photos and video covers after collection. Existing settings default to `none`; full videos remain opt-in. Media failures are reported without blocking Wiki exports.
+- Every sync refreshes the JSON source export used by Agents to extend existing notes.
+- X CDN delivery parameters no longer cause repeated knowledge compilation; existing source receipts remain valid during the upgrade.
+- Parse embedded X Article bodies and quoted posts, including their images, when present in the returned response.
+- Search both source posts and Wiki notes with readable match snippets.
+
 
 - `status` reports Wiki backlog depth and the last compile time, so a stalled compile queue is visible without inspecting files by hand.
 - `replay` re-parses stored captures with the current parser, recovering fields earlier parser versions skipped. Read-only by default; `--apply` merges differences using the same conservative rules as sync, and only the `items` table is touched.

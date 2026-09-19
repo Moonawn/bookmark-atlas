@@ -86,7 +86,7 @@ uv run bookmark-atlas sync --mode api
 
 ## 交给 Agent
 
-[**下载 Skill 安装包（v0.3.0）**](https://github.com/Moonawn/bookmark-atlas/releases/download/v0.3.0/bookmark-atlas-skill-0.3.0.zip) · [查看 Skill](skills/bookmark-atlas/SKILL.md) · [安装说明](docs/wiki.md#使用-skill--use-the-skill)
+[**下载 Skill 安装包（v0.4.0）**](https://github.com/Moonawn/bookmark-atlas/releases/download/v0.4.0/bookmark-atlas-skill-0.4.0.zip) · [查看 Skill](skills/bookmark-atlas/SKILL.md) · [安装说明](docs/wiki.md#使用-skill--use-the-skill)
 
 解压后，将整个 `bookmark-atlas/` 文件夹放入所用 Agent 支持的 Skills 目录；也可以让 Agent 直接读取仓库中的 Skill。先按上面的步骤安装 CLI。
 
@@ -125,7 +125,7 @@ uv run bookmark-atlas watch sync research
 
 SQLite 保存归档，Markdown 方便阅读，JSON 方便迁移。重复同步不重复添加；未出现在新一轮列表中的旧收藏仍会保留。模型整理失败时，原文和采集进度仍在，可以单独重试。
 
-图片可由 `fetch-media` 下载到本地，视频默认只保留首帧截图和原始地址，两者都记下来源。完整讨论串与外链正文暂不采集。网页接口随 X 更新可能变化；更多环境与测试范围见 [兼容性说明](docs/verification.md)。
+图片可由 `fetch-media` 下载到本地，视频默认只保留首帧截图和原始地址，两者都记下来源。响应中包含的 X 长文与引用推文可一并保存；完整讨论串和任意外链正文暂不采集。网页接口随 X 更新可能变化；更多环境与测试范围见 [兼容性说明](docs/verification.md)。
 
 ---
 

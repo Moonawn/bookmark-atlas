@@ -160,9 +160,7 @@ def parse_tweet(value: dict) -> Item | None:
             for u in entities.get("urls", [])
             if u.get("expanded_url") or u.get("url")
         ],
-        media=legacy.get("extended_entities", {}).get("media", [])
-        + article_media
-        + quoted_media,
+        media=legacy.get("extended_entities", {}).get("media", []) + article_media + quoted_media,
     )
 
 
