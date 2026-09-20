@@ -2,7 +2,23 @@
 
 Archive selected WeChat accounts through an existing RSS discovery service, or import individual article links. Atlas saves original article HTML, text, metadata and image references, then prepares its ordinary source-linked Wiki queue.
 
-## Set up
+## Reuse a local WeRead authorization
+
+An optional bridge can use the WeRead authorization already saved by a local WeRSS container:
+
+```sh
+bookmark-atlas wechat add my-reading --label 'Account name' --biz 'account-__biz'
+bookmark-atlas wechat connect --weread-container we-mp-rss
+bookmark-atlas wechat sync my-reading
+```
+
+Requires Docker, a running WeRSS container with WeRead authorization support, its saved `weread_data` in `/app/data/wx.lic`, and `/app/env_<architecture>/bin/python` with `requests` and `PyYAML`. Not all WeRSS versions provide this integration. Atlas does not install or reconfigure the service. The credential is read only inside that container; only public article data returns to Atlas, and error details never echo credentials.
+
+**This endpoint discovers only the latest article per account**, reported as `coverage: latest-only`. A known short article URL can also be supplied with `--seed`. Multiple publications between polls may be missed; this is not a historical crawler. Already discovered failures remain queued even after a newer article appears. Use a working RSS provider for broader discovery.
+
+`connect` selects one discovery backend. Explicit per-account `--feed-url` values still take priority; other accounts use the bridge. Expired authorization or rate limiting stops the WeChat run until the service is reauthorized. Keep the existing schedule unless a different polling interval is explicitly wanted.
+
+## Use RSS discovery
 
 Log in to your existing [WeRSS service](https://github.com/rachelos/we-mp-rss), complete the required WeChat authorization and add your chosen accounts. Atlas does not configure the service's login or copy its credentials.
 
@@ -25,7 +41,7 @@ bookmark-atlas wechat disable my-reading
 
 RSS / Atom entries must link to original WeChat articles. Include keywords match the title and body with OR semantics; excludes take priority. `--since` uses UTC publication dates. Changing filters reconsiders seen links without creating duplicate articles.
 
-Default `sync` includes X and enabled WeChat rules. `--site x` and `--site wechat` restrict collection. Reuse an existing scheduler. The RSS service must update its own feed; starting Atlas alone does not authorize or start upstream discovery. A rule without a working feed reports `needs_setup`, even if its seed article was saved.
+Default `sync` includes X and enabled WeChat rules. `--site x` and `--site wechat` restrict collection. Reuse an existing scheduler. The RSS service must update its own feed; starting Atlas alone does not authorize or start upstream discovery. A rule without a working feed or a configured bridge reports `needs_setup`, even if its seed article was saved.
 
 ## Reliability and limits
 

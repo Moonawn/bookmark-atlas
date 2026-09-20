@@ -326,3 +326,9 @@ def test_verified_shorter_article_edit_updates_hash(store, tmp_path):
         assert keep_article(store, tmp_path, client, URL)["updated"] == 1
     assert store.items()[0]["content_hash"] != before
     assert "结尾也必须保留" not in store.items()[0]["document"]["text"]
+
+
+@pytest.mark.parametrize("text", ["此内容因违规无法查看", "该内容已被发布者删除"])
+def test_unavailable_article_is_reported_without_empty_archive(text):
+    with pytest.raises(ParseError, match="删除"):
+        parse_article("<html><body>" + text + "</body></html>", URL)

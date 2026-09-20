@@ -24,6 +24,7 @@ from .watch import read_rules, run_watches, save_rule
 from .wechat import (
     client_for_wechat,
     connect_rss,
+    connect_weread,
     keep_article,
     save_subscription,
     subscriptions,
@@ -84,7 +85,9 @@ def parser():
         dest="wechat_command", required=True
     )
     wechat.add_parser("list")
-    wechat.add_parser("connect").add_argument("--rss-base", required=True)
+    connection = wechat.add_parser("connect").add_mutually_exclusive_group(required=True)
+    connection.add_argument("--rss-base")
+    connection.add_argument("--weread-container", help="复用已有 WeRSS 容器内的微信读书授权")
     add = wechat.add_parser("add")
     add.add_argument("name")
     for field in ("biz", "label", "seed", "feed-url", "since"):
@@ -263,6 +266,8 @@ def run(args):
             if args.wechat_command == "list":
                 return rules
             if args.wechat_command == "connect":
+                if args.weread_container:
+                    return connect_weread(home, args.weread_container)
                 return connect_rss(home, args.rss_base)
             if args.wechat_command == "add":
                 values = {

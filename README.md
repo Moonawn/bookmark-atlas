@@ -14,7 +14,7 @@
 
 **支持 X 收藏、指定作者和关注列表；新增公众号文章收录与 RSS 条件订阅。其他平台开发中。**
 
-公众号需要可用的文章链接或已授权的 RSS 发现服务，详见[公众号使用指南](docs/wechat.zh-CN.md)。
+公众号支持文章链接、RSS 订阅，也可复用本地 WeRSS 中的微信读书授权（每号最新一篇），详见[公众号使用指南](docs/wechat.zh-CN.md)。
 
 每天刷过很多内容，想用时却找不到；收藏夹越来越满，整理总留给以后。
 
@@ -88,7 +88,7 @@ uv run bookmark-atlas sync --mode api
 
 ## 交给 Agent
 
-[**下载 Skill 安装包（v0.4.0）**](https://github.com/Moonawn/bookmark-atlas/releases/download/v0.4.0/bookmark-atlas-skill-0.4.0.zip) · [查看 Skill](skills/bookmark-atlas/SKILL.md) · [安装说明](docs/wiki.md#使用-skill--use-the-skill)
+[**下载 Skill 安装包（v0.5.0）**](https://github.com/Moonawn/bookmark-atlas/releases/download/v0.5.0/bookmark-atlas-skill-0.5.0.zip) · [查看 Skill](skills/bookmark-atlas/SKILL.md) · [安装说明](docs/wiki.md#使用-skill--use-the-skill)
 
 解压后，将整个 `bookmark-atlas/` 文件夹放入所用 Agent 支持的 Skills 目录；也可以让 Agent 直接读取仓库中的 Skill。先按上面的步骤安装 CLI。
 

@@ -31,7 +31,7 @@ def article_url(value):
     p = urlsplit(html.unescape(value.strip()))
     if p.scheme not in ("http", "https") or p.hostname != ARTICLE_HOST or p.username or p.port:
         raise ParseError("需要 mp.weixin.qq.com 的公众号文章链接。")
-    if not re.fullmatch(r"/s(?:/[A-Za-z0-9_-]+)?", p.path):
+    if not re.fullmatch(r"/s(?:/[A-Za-z0-9_~-]+)?", p.path):
         raise ParseError("链接不是公众号文章页。")
     query = parse_qs(p.query)
     kept = {k: query[k][0] for k in ("__biz", "mid", "idx", "sn") if query.get(k)}
@@ -101,6 +101,8 @@ def parse_article(source, url, expected_biz=""):
     doc = Document(source)
     content = doc.ids.get("js_content")
     if content is None:
+        if any(s in doc.root.text() for s in ("此内容因违规无法查看", "该内容已被发布者删除")):
+            raise ParseError("文章已被平台限制或发布者删除；保留未解决记录，未按空正文入库。")
         if any(s in source for s in ("环境异常", "访问过于频繁", "wappoc_appmsgcaptcha")):
             raise VerificationRequired(
                 "公众号触发环境验证；本轮停止访问，请在浏览器完成验证后再试。"
@@ -370,6 +372,11 @@ def save_subscription(home, name, values):
 
 def keep_article(store, home, client, url, biz="", collection="wechat:shared", rule=None):
     source = get_text(client, url, article=True)
+    return keep_html(store, source, url, biz, collection, rule)
+
+
+def keep_html(store, source, url, biz="", collection="wechat:shared", rule=None):
+    """Archive a verified full body from either direct HTTP or an authorized bridge."""
     item = parse_article(source, url, biz)
     if rule:
         text = item.text.casefold()
@@ -427,6 +434,15 @@ def connect_rss(home, base_url):
     return value
 
 
+def connect_weread(home, container):
+    from .weread import validate_container
+
+    validate_container(container)
+    value = {"weread_container": container}
+    atomic_write(home / "wechat-discovery.json", json.dumps(value, indent=2))
+    return value
+
+
 def resolve_feeds(home, client, rules):
     """Match only configured account labels; article __biz is checked at intake."""
     configured = read_json(home / "wechat-discovery.json", {})
@@ -461,7 +477,7 @@ def resolve_feeds(home, client, rules):
 
 
 def sync_subscriptions(
-    store, home, *, name=None, limit=20, max_pages=10, client=None, sleep=time.sleep
+    store, home, *, name=None, limit=20, max_pages=10, client=None, sleep=time.sleep, bridge=None
 ):
     rules = subscriptions(home)
     if name and name not in rules:
@@ -479,6 +495,11 @@ def sync_subscriptions(
     own = client is None
     client = client or client_for_wechat()
     attempted = 0
+    container = read_json(home / "wechat-discovery.json", {}).get("weread_container")
+    if container and bridge is None:
+        from .weread import WeReadBridge
+
+        bridge = WeReadBridge(container)
     try:
         try:
             rules = resolve_feeds(home, client, rules)
@@ -487,7 +508,7 @@ def sync_subscriptions(
         result["needs_setup"] = sum(
             1
             for key, rule in rules.items()
-            if rule["enabled"] and not rule["feed_url"] and (not name or key == name)
+            if rule["enabled"] and not rule["feed_url"] and not bridge and (not name or key == name)
         )
         for key, rule in rules.items():
             if (name and key != name) or not rule.get("enabled", True):
@@ -523,6 +544,11 @@ def sync_subscriptions(
                         if paginated:
                             report["coverage_limited"] = True
                     report["discovery"] = "rss"
+                elif bridge:
+                    report.update(discovery="weread", coverage="latest-only")
+                    latest = bridge.latest(rule["biz"])
+                    if latest not in done and latest not in pending:
+                        pending.append(latest)
                 else:
                     report.update(
                         discovery="needs_feed",
@@ -538,9 +564,19 @@ def sync_subscriptions(
                         sleep(2)
                     attempted += 1
                     try:
-                        receipt = keep_article(
-                            store, home, client, url, rule["biz"], "wechat:" + key, rule
-                        )
+                        if bridge and not rule["feed_url"]:
+                            receipt = keep_html(
+                                store,
+                                bridge.content(rule["biz"], url),
+                                url,
+                                rule["biz"],
+                                "wechat:" + key,
+                                rule,
+                            )
+                        else:
+                            receipt = keep_article(
+                                store, home, client, url, rule["biz"], "wechat:" + key, rule
+                            )
                     except VerificationRequired:
                         raise
                     except AtlasError as exc:
@@ -553,7 +589,7 @@ def sync_subscriptions(
                     done.add(url)
                     progress.update(pending=pending, done=sorted(done))
                     atomic_write(state_path, json.dumps(state, ensure_ascii=False, indent=2))
-                if not report["failed"] and rule.get("feed_url"):
+                if not report["failed"] and (rule.get("feed_url") or bridge):
                     progress.update(last_success=now())
             except AtlasError as exc:
                 report.update(failed=report["failed"] + 1, error=str(exc))

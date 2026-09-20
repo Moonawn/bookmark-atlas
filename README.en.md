@@ -14,7 +14,7 @@
 
 **Supports X bookmarks, selected authors and following lists, plus WeChat article intake and conditional RSS subscriptions. Other platforms are in development.**
 
-WeChat requires accessible article links or an authorized RSS discovery service. See the [WeChat guide](docs/wechat.en.md).
+WeChat supports article links, RSS discovery, or an existing local WeRSS WeRead authorization (latest article per account). See the [WeChat guide](docs/wechat.en.md).
 
 You read plenty of posts, then struggle to find the useful ones when you need them. Your bookmarks grow; organizing them stays on the to-do list.
 
@@ -85,7 +85,7 @@ uv run bookmark-atlas sync --mode api
 
 ## Use with an Agent
 
-[**Download the Skill (v0.4.0)**](https://github.com/Moonawn/bookmark-atlas/releases/download/v0.4.0/bookmark-atlas-skill-0.4.0.zip) · [Read the Skill](skills/bookmark-atlas/SKILL.md) · [Installation](docs/wiki.md#使用-skill--use-the-skill)
+[**Download the Skill (v0.5.0)**](https://github.com/Moonawn/bookmark-atlas/releases/download/v0.5.0/bookmark-atlas-skill-0.5.0.zip) · [Read the Skill](skills/bookmark-atlas/SKILL.md) · [Installation](docs/wiki.md#使用-skill--use-the-skill)
 
 Extract the archive and copy the entire `bookmark-atlas/` folder into your Agent host's supported Skills directory, or ask your Agent to read the repository Skill directly. Install the CLI first using the steps above.
 

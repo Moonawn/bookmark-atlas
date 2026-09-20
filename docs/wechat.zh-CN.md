@@ -2,14 +2,31 @@
 
 配置要关注的公众号，按计划保存新文章，再由 Agent 判断哪些内容值得进入 Wiki。也可以随时提交一篇文章链接。
 
-## 两个入口
+## 选择入口
 
 - **文章链接**：下载原文，保留标题、公众号、发布日期、正文、图片引用和外链。
+- **微信读书授权**：复用本地 WeRSS 容器内已保存的授权，读取指定公众号最新一篇及已知短链接正文。
 - **RSS 订阅**：由已授权的订阅服务发现文章链接，Atlas 读取原始文章并核对公众号身份。
 
-发现服务与 Atlas 分开运行。可以连接已有 [WeRSS](https://github.com/rachelos/we-mp-rss)，或直接提供含公众号原始文章链接的 RSS / Atom。Atlas 不代为申请微信接口权限，不读取或复制其他服务的登录凭据。
+发现服务与 Atlas 分开运行。可以连接已有 [WeRSS](https://github.com/rachelos/we-mp-rss)，或直接提供含公众号原始文章链接的 RSS / Atom。Atlas 不代为申请微信接口权限。微信读书桥接在容器内部使用既有授权，凭据不返回 Atlas；不修改 WeRSS 的配置和调度。
 
-## 配置订阅
+## 使用已有微信读书授权
+
+如果已在本地 WeRSS 完成微信扫码授权，可以直接复用：
+
+```sh
+bookmark-atlas wechat add my-reading --label '你关注的公众号' --biz '文章链接中的__biz值'
+bookmark-atlas wechat connect --weread-container we-mp-rss
+bookmark-atlas wechat sync my-reading
+```
+
+这是可选的本地桥接，需要 Docker、正在运行的 WeRSS 容器，以及容器内 `/app/data/wx.lic` 的 `weread_data` 授权结构和 `/app/env_<架构>/bin/python` 环境。并非所有 WeRSS 版本都具备微信读书授权功能；Atlas 不自动安装或修改服务。容器内需已有 `requests` 和 `PyYAML`。桥接只返回公开文章内容，错误信息不回显凭据。
+
+**目前仅轮询每个号的最新一篇**，结果中显示 `coverage: latest-only`。可用 `--seed` 补充已知文章短链接；这不是全量历史抓取，轮询间多次发文可能遗漏。已经发现但失败的链接会留待补抓。需更完整的文章发现时，改用已配置好的 RSS 服务。
+
+`connect` 选择一种发现方式。明确配置了 `--feed-url` 的账号仍优先使用 RSS；其他账号使用微信读书桥接。授权过期或请求受限会停止本轮公众号访问，重新在 WeRSS 页面授权后重试。
+
+## 使用 RSS 发现
 
 先在自己的 WeRSS 页面完成登录、微信授权和公众号添加，再登记 Atlas 规则。`__biz` 是公众号的稳定标识，可以从该号文章长链接中取得；不要用昵称代替。
 
@@ -30,7 +47,7 @@ bookmark-atlas wechat list
 bookmark-atlas wechat sync my-reading --limit 20
 ```
 
-同名账号无法唯一匹配时，需要指定 `--feed-url`。最终以原文 `__biz` 校验身份。没有 RSS 的规则仍可保存种子文章，但会显示 `needs_setup`，不能称为已启用自动发现。
+同名账号无法唯一匹配时，需要指定 `--feed-url`。最终以原文 `__biz` 校验身份。没有 RSS、也没有启用微信读书桥接的规则仍可保存种子文章，但会显示 `needs_setup`，不能称为已启用自动发现。
 
 ## 条件与日常使用
 
