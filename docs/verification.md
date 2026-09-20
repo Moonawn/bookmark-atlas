@@ -6,18 +6,16 @@
 - X bookmarks and directed author collection through an OAuth user token or an authenticated browser session.
 - Chrome on macOS has live integration coverage. Firefox, Brave, Edge, Chromium and Quark adapters require verification against the selected browser profile.
 - Official API access requires an X Developer App, the appropriate OAuth scopes and available API credits.
-- Built-in Ollama summaries require a running local Ollama service and an installed model. Agent Wiki compilation can instead run in the connected Agent.
-- WeChat supports accessible article links, RSS/Atom discovery, and an optional local WeRSS container bridge with existing WeRead authorization. The bridge discovers only the latest article per account.
+- Model summaries require a running local Ollama service and an installed model.
 
 ## Validation coverage
 
 | Component | Coverage |
 |---|---|
-| Archive and adapters | 154 automated cases covering normalization, paging, merging, transactions, recovery, setup, scheduling, Wiki provenance, media fetching, capture replay, WeChat parsing/discovery and the WeRead bridge protocol |
+| Archive and adapters | 116 automated cases covering normalization, paging, merging, transactions, recovery, setup, scheduling, Wiki provenance, media fetching and capture replay |
 | X web adapter | Live authentication, historical collection, repeat sync, Following and UserTweets access, and automatic adapter selection |
 | Official X API | Mock HTTP coverage for identity, paging, expansions, long posts, author/following routes, errors and token refresh; live OAuth validation remains pending |
 | Ollama | Mock HTTP coverage for output validation, retries and local endpoint restrictions; live model validation remains pending |
-| WeChat | Live authorized collection from three accounts: five full articles and 41 images; repeat sync produced no duplicates. A platform-restricted older article stayed unresolved. RSS/Atom discovery, queue rollover, filtering and parser failure paths have automated coverage. |
 | Distribution | wheel and source builds; clean-environment installation and CLI execution |
 | CI | macOS and Linux with Python 3.11, 3.12 and 3.13 |
 
