@@ -43,6 +43,10 @@ PRAGMA user_version=2;
 
 
 def merge_document(old: dict, incoming: dict) -> dict:
+    # A verified WeChat article is a complete body snapshot, including edits
+    # that shorten it. X API previews keep the conservative merge below.
+    if incoming.get("site") == "wechat":
+        return dict(incoming)
     merged = dict(old)
     for key, value in incoming.items():
         if key == "media":
