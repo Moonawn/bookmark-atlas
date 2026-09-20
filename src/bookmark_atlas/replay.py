@@ -16,9 +16,8 @@ import json
 from typing import Any
 
 from .adapters.x_web import parse_page
-from .models import Page, ParseError, now
+from .models import ParseError, now
 from .store import merge_document, updated_content_hash
-from .wechat import parse_article
 
 
 def replay(
@@ -52,23 +51,18 @@ def replay(
     parse_failures = 0
     for row in rows:
         try:
-            payload = json.loads(row["payload"])
-            page = (
-                Page([parse_article(payload["html"], payload["url"])], None, payload)
-                if "html" in payload and "url" in payload
-                else parse_page(payload)
-            )
+            page = parse_page(json.loads(row["payload"]))
         except ParseError:
             # A page the current parser cannot read is reported, not fatal:
             # older captures may predate a structural change.
             parse_failures += 1
             continue
         for item in page.items:
-            parsed[(item.site, item.item_id)] = item
+            parsed[item.item_id] = item
 
     known = unknown = 0
     changed: list[tuple[Any, dict, str]] = []
-    for (_, item_id), item in parsed.items():
+    for item_id, item in parsed.items():
         old = store.db.execute(
             "SELECT document,content_hash FROM items WHERE site=? AND item_id=?",
             (item.site, item_id),
