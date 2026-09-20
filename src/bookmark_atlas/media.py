@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -74,11 +75,12 @@ def targets(document: dict, video_limit: int = VIDEO_LIMIT) -> list[dict[str, An
                 }
             )
         elif thumb:
+            wechat = document.get("site") == "wechat"
             found.append(
                 {
                     "kind": "photo",
-                    "url": f"{thumb}?name=orig",
-                    "thumbnail": f"{thumb}?name=small",
+                    "url": thumb if wechat else f"{thumb}?name=orig",
+                    "thumbnail": thumb if wechat else f"{thumb}?name=small",
                     "limit": PHOTO_LIMIT,
                     "quoted": quoted,
                 }
@@ -110,7 +112,10 @@ def download(client, url: str, part: Path, limit: int) -> tuple[int, str]:
     Returns (bytes seen, content type). Over-limit files are removed rather
     than kept, so a partial download never masquerades as the real thing.
     """
-    with client.stream("GET", url) as response:
+    kwargs = {}
+    if urlsplit(url).hostname in {"mmbiz.qpic.cn", "mmbiz.qlogo.cn"}:
+        kwargs["headers"] = {"Referer": "https://mp.weixin.qq.com/"}
+    with client.stream("GET", url, **kwargs) as response:
         if response.status_code != 200:
             raise AtlasError(f"媒体请求失败（HTTP {response.status_code}）。")
         content_type = (response.headers.get("content-type") or "").split(";")[0].strip()

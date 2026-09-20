@@ -1,6 +1,6 @@
 ---
 name: bookmark-atlas
-description: Configure Bookmark Atlas, sync the user's X bookmarks and selected author feeds, and compile source-linked local Wiki notes. Use for bookmark archiving, scheduled collection, or organizing an existing Atlas archive with an Agent.
+description: Configure Bookmark Atlas, sync X bookmarks, selected authors and WeChat article subscriptions, and compile source-linked local Wiki notes. Use for bookmark archiving, scheduled collection, or organizing an existing Atlas archive with an Agent.
 ---
 
 # Bookmark Atlas
@@ -24,6 +24,10 @@ For Wiki mode, run `export wiki` if the sync did not already prepare it. The pri
 Read `watch list` before adding rules. Resolve the desired author names or following-list scope, rolling day window, keywords, language and original/quote selection with the user. Do not assume that access to a following list authorizes monitoring every author. Use `watch add <name> --authors <names>` or `--following` with agreed filters. A saved rule is enabled and joins future `sync` runs; reuse the existing schedule. `watch disable <name>` stops a rule without deleting saved material. See [directed collection](references/watch.md) for commands and limits.
 
 Report author rotation and partial coverage honestly: a capped run is not a complete following-list archive. Large rosters with short time windows can miss posts before authors are visited. Replies, reposts, full threads and arbitrary external article bodies are outside the current collection scope. Embedded X Articles and quoted posts are read when included in the response.
+
+## WeChat subscriptions
+
+For WeChat, read [WeChat intake](references/wechat.md). Register only selected accounts, connect an existing RSS service or import article links. Default `sync` includes enabled WeChat rules alongside X. Check `wechat.failed`, `wechat.needs_setup` and `wechat.verification_required` before declaring a run idle, even if Wiki pending is zero. Keep RSS login and upstream authorization in the source service. Article access may require user verification; never report automatic discovery as active based only on a saved rule or a seed article.
 
 ## Media and stored responses
 

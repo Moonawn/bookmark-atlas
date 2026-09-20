@@ -14,13 +14,21 @@ from .analysis import LocalAnalysis, OllamaAnalysis, analyze_pending
 from .config import home_path
 from .export import export_json, export_markdown, match_snippet
 from .media import fetch_media
-from .models import AtlasError, RateLimitError
+from .models import AtlasError, RateLimitError, source_key
 from .oauth import login
 from .preferences import load, next_daily, setup, validate
 from .replay import replay
 from .store import Store
 from .sync import process_lock, sync
 from .watch import read_rules, run_watches, save_rule
+from .wechat import (
+    client_for_wechat,
+    connect_rss,
+    keep_article,
+    save_subscription,
+    subscriptions,
+    sync_subscriptions,
+)
 from .wiki import apply_notes, export_wiki, search_notes, wiki_status
 
 
@@ -40,7 +48,7 @@ def parser():
         cmd = commands.add_parser(
             name, help="同步收藏" if name == "sync" else "按间隔执行同步和整理"
         )
-        cmd.add_argument("--site", choices=["x"], default="x")
+        cmd.add_argument("--site", choices=["all", "x", "wechat"], default="all")
         cmd.add_argument("--mode", choices=["auto", "api", "web"], default=None)
         cmd.add_argument("--prefer", choices=["api", "web"], default="api")
         cmd.add_argument(
@@ -72,6 +80,24 @@ def parser():
             cmd.add_argument(
                 "--once", action="store_true", help="执行一轮后退出，用于系统调度和验证"
             )
+    wechat = commands.add_parser("wechat", help="公众号订阅与文章链接收录").add_subparsers(
+        dest="wechat_command", required=True
+    )
+    wechat.add_parser("list")
+    wechat.add_parser("connect").add_argument("--rss-base", required=True)
+    add = wechat.add_parser("add")
+    add.add_argument("name")
+    for field in ("biz", "label", "seed", "feed-url", "since"):
+        add.add_argument("--" + field)
+    for field in ("keywords", "exclude"):
+        add.add_argument("--" + field, help="逗号分隔")
+    for action in ("enable", "disable"):
+        wechat.add_parser(action).add_argument("name")
+    collect = wechat.add_parser("sync")
+    collect.add_argument("name", nargs="?")
+    collect.add_argument("--limit", type=positive, default=20)
+    collect.add_argument("--max-pages", type=positive, default=10)
+    wechat.add_parser("import").add_argument("url")
     watch = commands.add_parser("watch", help="配置作者与关注列表的定向采集").add_subparsers(
         dest="watch_command", required=True
     )
@@ -154,29 +180,60 @@ def factories_for(args, home):
     return {"api": lambda: XAPI(home), "web": lambda: XWeb(args.browser, args.cookie_file)}
 
 
+def wechat_media(store, home):
+    keys = [source_key(r["document"]) for r in store.items() if r["site"] == "wechat"]
+    if not keys:
+        return {"items": 0, "downloaded": 0, "failed": 0}
+    return fetch_media(store, home, items=keys)
+
+
 def cycle(args, home):
     with process_lock(home):
         store = Store(home)
         try:
-            result = sync(
-                store,
-                factories_for(args, home),
-                site=args.site,
-                mode=args.mode,
-                preferred=args.prefer,
-                max_pages=args.max_pages,
-                full=args.full,
-                overlap_pages=args.overlap_pages,
-            )
-            try:
-                result["watch"] = run_watches(
-                    store, home, factories_for(args, home), mode=args.mode, preferred=args.prefer
-                )
-            except AtlasError as exc:
-                result["watch"] = {"failed": True, "error": str(exc)}
+            result = {"added": 0, "updated": 0}
+            if args.site != "wechat":
+                try:
+                    result = sync(
+                        store,
+                        factories_for(args, home),
+                        site="x",
+                        mode=args.mode,
+                        preferred=args.prefer,
+                        max_pages=args.max_pages,
+                        full=args.full,
+                        overlap_pages=args.overlap_pages,
+                    )
+                except AtlasError as exc:
+                    if args.site == "x" or not subscriptions(home):
+                        raise
+                    result.update(failed=True, error=str(exc))
+                try:
+                    result["watch"] = (
+                        {}
+                        if result.get("failed")
+                        else run_watches(
+                            store,
+                            home,
+                            factories_for(args, home),
+                            mode=args.mode,
+                            preferred=args.prefer,
+                        )
+                    )
+                except AtlasError as exc:
+                    result["watch"] = {"failed": True, "error": str(exc)}
+            if args.site != "x":
+                try:
+                    result["wechat"] = sync_subscriptions(store, home)
+                except AtlasError as exc:
+                    result["wechat"] = {"failed": True, "error": str(exc)}
             if args.media == "images":
                 try:
-                    result["media"] = fetch_media(store, home)
+                    result["media"] = (
+                        wechat_media(store, home)
+                        if args.site == "wechat"
+                        else fetch_media(store, home)
+                    )
                 except AtlasError as exc:
                     result["media"] = {"failed": True, "error": str(exc)}
             result["json"] = export_json(store, home / "exports" / "bookmarks.json")
@@ -200,6 +257,58 @@ def run(args):
     settings = load(home)
     if args.command == "settings":
         return settings
+    if args.command == "wechat":
+        with process_lock(home):
+            rules = subscriptions(home)
+            if args.wechat_command == "list":
+                return rules
+            if args.wechat_command == "connect":
+                return connect_rss(home, args.rss_base)
+            if args.wechat_command == "add":
+                values = {
+                    k: getattr(args, k)
+                    for k in ("biz", "label", "seed", "feed_url", "since")
+                    if getattr(args, k) is not None
+                }
+                for key in ("keywords", "exclude"):
+                    if getattr(args, key) is not None:
+                        values[key] = [
+                            v.strip() for v in getattr(args, key).split(",") if v.strip()
+                        ]
+                return save_subscription(home, args.name, values)
+            if args.wechat_command in ("enable", "disable"):
+                if args.name not in rules:
+                    raise AtlasError("公众号订阅不存在。")
+                return save_subscription(
+                    home, args.name, {"enabled": args.wechat_command == "enable"}
+                )
+            store = Store(home)
+            try:
+                if args.wechat_command == "import":
+                    with client_for_wechat() as client:
+                        result = keep_article(store, home, client, args.url)
+                else:
+                    result = sync_subscriptions(
+                        store, home, name=args.name, limit=args.limit, max_pages=args.max_pages
+                    )
+                if settings["media"] == "images":
+                    try:
+                        result["media"] = wechat_media(store, home)
+                    except AtlasError as exc:
+                        result["media"] = {"failed": True, "error": str(exc)}
+                engine = (
+                    OllamaAnalysis(settings["ollama_model"])
+                    if settings["ollama_model"]
+                    else LocalAnalysis()
+                )
+                result["analysis"] = analyze_pending(store, engine, limit=500)
+                result["json"] = export_json(store, home / "exports" / "bookmarks.json")
+                result["report"] = export_markdown(store, home / "reports", engine.name)
+                if settings["organization"] == "wiki":
+                    result["wiki"] = export_wiki(store, home / "wiki", engine.name)
+                return result
+            finally:
+                store.close()
     for key in ("mode", "browser", "organization", "ollama_model", "media"):
         if hasattr(args, key) and getattr(args, key) is None:
             setattr(args, key, settings[key])
@@ -298,6 +407,9 @@ def run(args):
                         for k in ("downloaded", "video_frames", "failed")
                     )
                     or any(result.get("watch", {}).get(k) for k in ("added", "updated", "failed"))
+                    or any(result.get("wechat", {}).get(k) for k in ("added", "updated", "failed"))
+                    or result.get("wechat", {}).get("needs_setup")
+                    or result.get("failed")
                 ):
                     print(json.dumps(result, ensure_ascii=False), flush=True)
                 wait = args.interval
@@ -417,6 +529,9 @@ def main():
             or result.get("analysis", {}).get("failed")
             or result.get("watch", {}).get("failed")
             or result.get("media", {}).get("failed")
+            or result.get("wechat", {}).get("failed")
+            or result.get("wechat", {}).get("needs_setup")
+            or result.get("needs_setup")
         ):
             return 1
         return 0

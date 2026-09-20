@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- WeChat article intake and conditional RSS / Atom subscriptions, with stable account checks, article deduplication and persistent retries after feed rollover.
+- Connect an existing WeRSS catalogue and match only explicitly selected accounts; report missing setup and verification challenges separately from successful collection.
+- Include enabled WeChat subscriptions in default sync, isolate platform failures, and reuse the existing media archive and Wiki handoff. Restrict a run with `--site x` or `--site wechat`.
+- Preserve WeChat image parameters and Referer, replay captured article HTML offline, and recognize shorter verified article revisions.
+- Add bilingual WeChat guides and Agent Skill instructions. Upstream login and real-feed acceptance remain deployment-specific requirements.
+
 ## 0.4.0 — 2026-09-19
 
 - Media downloads resume per asset: retry failed or missing files, reuse successful files, preserve progress on network errors, and upgrade video thumbnails on request.

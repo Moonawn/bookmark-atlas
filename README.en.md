@@ -12,7 +12,9 @@
 
 </div>
 
-**Currently supports X: bookmarks and conditional collection from selected authors or your following list. Other platforms are in development.**
+**Supports X bookmarks, selected authors and following lists, plus WeChat article intake and conditional RSS subscriptions. Other platforms are in development.**
+
+WeChat requires accessible article links or an authorized RSS discovery service. See the [WeChat guide](docs/wechat.en.md).
 
 You read plenty of posts, then struggle to find the useful ones when you need them. Your bookmarks grow; organizing them stays on the to-do list.
 
