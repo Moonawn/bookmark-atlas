@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.0 — withdrawn 2026-09-20
+
+The WeChat integration has been withdrawn from the stable release. It depends on an external WeRSS authorization environment and has not passed standalone onboarding and recovery acceptance. The release is retained as a draft; development remains on `feat/wechat-subscriptions`. Stable code and installation instructions are restored to v0.4.0. Existing private archives are not deleted.
+
 ## 0.4.0 — 2026-09-19
 
 - Media downloads resume per asset: retry failed or missing files, reuse successful files, preserve progress on network errors, and upgrade video thumbnails on request.

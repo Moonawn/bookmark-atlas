@@ -12,6 +12,8 @@
 
 </div>
 
+**The current stable release is v0.4.0. WeChat integration remains experimental and is not included in the stable feature set.**
+
 **Currently supports X: bookmarks and conditional collection from selected authors or your following list. Other platforms are in development.**
 
 You read plenty of posts, then struggle to find the useful ones when you need them. Your bookmarks grow; organizing them stays on the to-do list.
